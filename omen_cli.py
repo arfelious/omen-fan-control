@@ -35,6 +35,15 @@ def cli(ctx, config, help_extra):
         
     ctx.ensure_object(dict)
     ctx.obj['config_path'] = config
+    
+    # Root check
+    import os
+    controller = FanController(config_path=config)
+    if os.geteuid() != 0 and not controller.config.get("bypass_root_warning", False):
+        click.echo(click.style("WARNING: Running without root privileges.", fg="yellow"))
+        click.echo(click.style("Most commands require root to function correctly.", fg="yellow"))
+        click.echo(click.style("Use --bypass-root-warning in 'omen_cli.py options' config to hide this.", dim=True))
+        click.echo("", err=True)
 
 def get_controller():
     ctx = click.get_current_context()

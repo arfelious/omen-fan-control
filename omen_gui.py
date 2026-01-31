@@ -189,6 +189,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("HP Omen Fan Control")
         self.resize(900, 600)
         
+        # Set Window Icon
+        icon_path = OMEN_FAN_DIR / "assets" / "logo_test.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+        
         self.controller = FanController()
         self.watchdog_timer = QTimer()
         self.watchdog_timer.timeout.connect(self.run_watchdog)
@@ -270,6 +275,26 @@ class MainWindow(QMainWindow):
         self.rpm_timer.start(2000)
 
         self.center_window()
+
+        self.center_window()
+
+        # Root Check
+        if os.geteuid() != 0 and not self.controller.config.get("bypass_root_warning", False):
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Root Privileges Required")
+            msg.setText("This application is not running as root.")
+            msg.setInformativeText("Most features (fan control, driver installation) require root privileges to function correctly.\n\nIt is recommended to run this application with 'sudo'.")
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            
+            chk = QCheckBox("Don't show this again")
+            msg.setCheckBox(chk)
+            
+            msg.exec()
+            
+            if chk.isChecked():
+                self.controller.config["bypass_root_warning"] = True
+                self.controller.save_config()
 
         if not self.controller.config.get("bypass_warning", False):
             supported, board_name = self.controller.check_board_support()
@@ -723,6 +748,11 @@ class MainWindow(QMainWindow):
         self.bypass_check.setChecked(self.controller.config.get("bypass_patch_warning", False))
         self.bypass_check.toggled.connect(self.save_options)
         form_grid.addWidget(self.bypass_check, 3, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+        self.bypass_root_check = QCheckBox("Bypass Root Warning")
+        self.bypass_root_check.setChecked(self.controller.config.get("bypass_root_warning", False))
+        self.bypass_root_check.toggled.connect(self.save_options)
+        form_grid.addWidget(self.bypass_root_check, 4, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         layout.addWidget(form_widget, alignment=Qt.AlignmentFlag.AlignCenter)
         
@@ -1186,6 +1216,12 @@ if __name__ == "__main__":
     
     app = QApplication(sys.argv)
     app.setStyle("Windows")
+    
+    # Set App Icon
+    icon_path = OMEN_FAN_DIR / "assets" / "logo.png"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+        
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

@@ -27,7 +27,12 @@ from pathlib import Path
 # Constants
 HWMON_PATH_PATTERN = "/sys/devices/platform/hp-wmi/hwmon/*/"
 THERMAL_ZONE_PATH = "/sys/class/thermal/thermal_zone0/temp"
-CONFIG_DIR = Path("/etc/omen-fan-control")
+# Determine config path based on permissions
+if os.geteuid() == 0:
+    CONFIG_DIR = Path("/etc/omen-fan-control")
+else:
+    CONFIG_DIR = Path(os.path.expanduser("~/.config/omen-fan-control"))
+
 CONFIG_FILE = CONFIG_DIR / "config.json"
 DEFAULT_CALIBRATION_WAIT = 30
 DEFAULT_WATCHDOG_INTERVAL = 90
@@ -129,7 +134,8 @@ class FanController:
             "bypass_warning": False,
             "mode": "auto",
             "manual_pwm": 0,
-            "curve_interpolation": "smooth"
+            "curve_interpolation": "smooth",
+            "bypass_root_warning": False
         }
         
         if not self.config_path.exists():
@@ -540,10 +546,10 @@ WantedBy=multi-user.target
             with open("omen-fan-control.service", "w") as f:
                 f.write(service_content)
                 
-            subprocess.run(["sudo", "mv", "omen-fan-control.service", str(service_path)], check=True)
-            subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
-            subprocess.run(["sudo", "systemctl", "enable", "omen-fan-control.service"], check=True)
-            subprocess.run(["sudo", "systemctl", "start", "omen-fan-control.service"], check=True)
+            subprocess.run(["mv", "omen-fan-control.service", str(service_path)], check=True)
+            subprocess.run(["systemctl", "daemon-reload"], check=True)
+            subprocess.run(["systemctl", "enable", "omen-fan-control.service"], check=True)
+            subprocess.run(["systemctl", "start", "omen-fan-control.service"], check=True)
             return True, "Service created and started."
         except Exception as e:
             return False, f"Failed to create service: {e}"
@@ -551,14 +557,14 @@ WantedBy=multi-user.target
     def remove_service(self):
         """Stops and removes the systemd service."""
         try:
-            subprocess.run(["sudo", "systemctl", "stop", "omen-fan-control.service"], check=False)
-            subprocess.run(["sudo", "systemctl", "disable", "omen-fan-control.service"], check=False)
+            subprocess.run(["systemctl", "stop", "omen-fan-control.service"], check=False)
+            subprocess.run(["systemctl", "disable", "omen-fan-control.service"], check=False)
             
             service_path = Path("/etc/systemd/system/omen-fan-control.service")
             if service_path.exists():
-                subprocess.run(["sudo", "rm", str(service_path)], check=True)
+                subprocess.run(["rm", str(service_path)], check=True)
                 
-            subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
+            subprocess.run(["systemctl", "daemon-reload"], check=True)
             return True, "Service removed."
         except Exception as e:
             return False, f"Failed to remove service: {e}"
@@ -587,20 +593,20 @@ WantedBy=multi-user.target
             try:
                 result = subprocess.run(["dkms", "status"], capture_output=True, text=True)
                 if dkms_name in result.stdout:
-                    subprocess.run(["sudo", "dkms", "remove", f"{dkms_name}/{dkms_version}", "--all"], check=False)
+                    subprocess.run(["dkms", "remove", f"{dkms_name}/{dkms_version}", "--all"], check=False)
                     messages.append("Removed DKMS module.")
             except FileNotFoundError:
                 pass  # DKMS not installed
             
             # 2. Remove DKMS source directory
             dkms_src = Path(f"/usr/src/{dkms_name}-{dkms_version}")
-            if dkms_src.exists():
-                subprocess.run(["sudo", "rm", "-rf", str(dkms_src)], check=False)
+            if dkms_src.exists() and dkms_name in str(dkms_src) and len(str(dkms_src)) > 10:
+                subprocess.run(["rm", "-rf", str(dkms_src)], check=False)
             
             # 3. Remove our kernel hooks source
             hook_src = Path(f"/usr/src/{dkms_name}")
-            if hook_src.exists():
-                subprocess.run(["sudo", "rm", "-rf", str(hook_src)], check=False)
+            if hook_src.exists() and dkms_name in str(hook_src) and len(str(hook_src)) > 10:
+                subprocess.run(["rm", "-rf", str(hook_src)], check=False)
             
             # 4. Remove distro-specific kernel hooks
             hook_paths = [
@@ -610,7 +616,7 @@ WantedBy=multi-user.target
             ]
             for hook in hook_paths:
                 if Path(hook).exists():
-                    subprocess.run(["sudo", "rm", hook], check=False)
+                    subprocess.run(["rm", hook], check=False)
                     messages.append(f"Removed hook: {Path(hook).name}")
             
             # 5. Restore backup files
@@ -626,22 +632,22 @@ WantedBy=multi-user.target
                 if search_dir.exists():
                     for bak_file in search_dir.rglob("*.bak"): # Recursive search for updates dir
                         target = bak_file.parent / bak_file.stem
-                        subprocess.run(["sudo", "mv", str(bak_file), str(target)], check=True)
+                        subprocess.run(["mv", str(bak_file), str(target)], check=True)
                         restored_count += 1
             
             if restored_count == 0 and not messages:
                 if self.config.get("install_type") == "temporary":
-                     subprocess.run(["sudo", "modprobe", "-r", "hp-wmi"], check=False)
-                     subprocess.run(["sudo", "modprobe", "hp-wmi"], check=False)
+                     subprocess.run(["modprobe", "-r", "hp-wmi"], check=False)
+                     subprocess.run(["modprobe", "hp-wmi"], check=False)
                      self.config.pop("install_type", None)
                      self.save_config()
                      return True, "Temporary driver unloaded. (No backups needed)"
                 
                 return False, "No backup files (.bak) found to restore."
 
-            subprocess.run(["sudo", "depmod", "-a"], check=True)
-            subprocess.run(["sudo", "modprobe", "-r", "hp-wmi"], check=False) 
-            subprocess.run(["sudo", "modprobe", "hp-wmi"], check=True)
+            subprocess.run(["depmod", "-a"], check=True)
+            subprocess.run(["modprobe", "-r", "hp-wmi"], check=False) 
+            subprocess.run(["modprobe", "hp-wmi"], check=True)
             
             self.config.pop("install_type", None)
             self.save_config()

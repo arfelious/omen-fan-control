@@ -249,8 +249,10 @@ class MainWindow(QMainWindow):
         
         self.apply_dark_theme()
         
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel("Checking...")
         self.status_label.setStyleSheet("color: #888; padding: 5px;")
+        self.status_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.status_label.mousePressEvent = self.on_status_click
         self.statusBar().addWidget(self.status_label)
         
         self.svc_status_label = QLabel("Service: Checking...")
@@ -853,6 +855,30 @@ class MainWindow(QMainWindow):
         self.rpm_label.setText(f"{rpm} RPM")
         self.temp_label.setText(f"{temp}°C")
         
+        self.check_driver_status()
+
+    def check_driver_status(self):
+        # Don't overwrite status if we are in the middle of an operation
+        current_text = self.status_label.text()
+        if any(x in current_text for x in ["Installing", "Restoring", "Calibrating", "Stress"]):
+            return
+
+        # Refresh paths if driver might have just been loaded
+        if not self.controller.pwm1_path or not self.controller.pwm1_path.exists():
+            self.controller._find_paths()
+            
+        if self.controller.pwm1_path and self.controller.pwm1_path.exists():
+            if "Needs Driver Installation" in self.status_label.text() or "Checking..." in self.status_label.text():
+                 self.status_label.setText("Ready")
+                 self.status_label.setStyleSheet("color: #888; padding: 5px;")
+        else:
+            self.status_label.setText("Needs Driver Installation")
+            self.status_label.setStyleSheet("color: #d63333; font-weight: bold; padding: 5px;")
+
+    def on_status_click(self, event):
+        if "Needs Driver Installation" in self.status_label.text():
+            self.show_driver()
+        
     def on_mode_change(self, text):
         self.manual_widget.setVisible(text == "Manual")
         self.curve_editor_container.setVisible(text == "Curve")
@@ -1002,6 +1028,7 @@ class MainWindow(QMainWindow):
             
         action_name = "Restoring" if type_ == "restore" else "Installing"
         self.status_label.setText(f"{action_name} driver...")
+        self.status_label.setStyleSheet("color: #888; padding: 5px;")
         
         # We need to pass force arg if installing
         if type_ != "restore":
@@ -1017,6 +1044,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText(msg)
         
         if success:
+            self.status_label.setStyleSheet("color: #888; padding: 5px;")
             QMessageBox.information(self, "Driver Install", msg)
         else:
             if msg == "PWM_DETECTED":

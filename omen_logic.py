@@ -577,20 +577,59 @@ WantedBy=multi-user.target
             return False
 
     def restore_driver(self):
-        """Restores the original driver from backup files."""
+        """Restores the original driver from backup files and removes DKMS/hooks."""
+        messages = []
+        
         try:
+            # 1. Remove DKMS module if installed
+            dkms_name = "hp-wmi-omen"
+            dkms_version = "1.0"
+            try:
+                result = subprocess.run(["dkms", "status"], capture_output=True, text=True)
+                if dkms_name in result.stdout:
+                    subprocess.run(["sudo", "dkms", "remove", f"{dkms_name}/{dkms_version}", "--all"], check=False)
+                    messages.append("Removed DKMS module.")
+            except FileNotFoundError:
+                pass  # DKMS not installed
+            
+            # 2. Remove DKMS source directory
+            dkms_src = Path(f"/usr/src/{dkms_name}-{dkms_version}")
+            if dkms_src.exists():
+                subprocess.run(["sudo", "rm", "-rf", str(dkms_src)], check=False)
+            
+            # 3. Remove our kernel hooks source
+            hook_src = Path(f"/usr/src/{dkms_name}")
+            if hook_src.exists():
+                subprocess.run(["sudo", "rm", "-rf", str(hook_src)], check=False)
+            
+            # 4. Remove distro-specific kernel hooks
+            hook_paths = [
+                "/etc/pacman.d/hooks/90-hp-wmi-omen.hook",  # Arch
+                "/etc/kernel/postinst.d/zz-hp-wmi-omen",   # Debian/Ubuntu
+                "/etc/kernel/install.d/99-hp-wmi-omen.install",  # Fedora
+            ]
+            for hook in hook_paths:
+                if Path(hook).exists():
+                    subprocess.run(["sudo", "rm", hook], check=False)
+                    messages.append(f"Removed hook: {Path(hook).name}")
+            
+            # 5. Restore backup files
             kernel_ver = subprocess.check_output(["uname", "-r"]).decode().strip()
-            hp_driver_dir = Path(f"/lib/modules/{kernel_ver}/kernel/drivers/platform/x86/hp")
+            search_paths = [
+                Path(f"/lib/modules/{kernel_ver}/kernel/drivers/platform/x86/hp"),
+                Path(f"/lib/modules/{kernel_ver}/updates")
+            ]
             
             restored_count = 0
             
-            if hp_driver_dir.exists():
-                for bak_file in hp_driver_dir.glob("*.bak"):
-                    target = bak_file.parent / bak_file.stem
-                    subprocess.run(["sudo", "cp", str(bak_file), str(target)], check=True)
-                    restored_count += 1
+            for search_dir in search_paths:
+                if search_dir.exists():
+                    for bak_file in search_dir.rglob("*.bak"): # Recursive search for updates dir
+                        target = bak_file.parent / bak_file.stem
+                        subprocess.run(["sudo", "mv", str(bak_file), str(target)], check=True)
+                        restored_count += 1
             
-            if restored_count == 0:
+            if restored_count == 0 and not messages:
                 if self.config.get("install_type") == "temporary":
                      subprocess.run(["sudo", "modprobe", "-r", "hp-wmi"], check=False)
                      subprocess.run(["sudo", "modprobe", "hp-wmi"], check=False)
@@ -607,7 +646,11 @@ WantedBy=multi-user.target
             self.config.pop("install_type", None)
             self.save_config()
             
-            return True, f"Restored {restored_count} files. Driver reloaded."
+            if restored_count > 0:
+                messages.append(f"Restored {restored_count} driver backup(s).")
+            messages.append("Driver reloaded.")
+            
+            return True, " ".join(messages)
             
         except subprocess.CalledProcessError as e:
             return False, f"Error restoring driver: {e}"

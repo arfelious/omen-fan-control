@@ -1,0 +1,15 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = linux
+Target = linux-lts
+Target = linux-zen
+Target = linux-hardened
+
+[Action]
+Description = Rebuilding hp-wmi-omen module...
+When = PostTransaction
+Exec = /bin/bash -c 'cd /usr/src/hp-wmi-omen && make clean && make && for kver in /lib/modules/*/; do kver=$(basename "$kver"); if [ -d "/lib/modules/$kver/build" ]; then make -C /lib/modules/$kver/build M=/usr/src/hp-wmi-omen modules && install -Dm644 /usr/src/hp-wmi-omen/hp-wmi.ko /lib/modules/$kver/kernel/drivers/platform/x86/hp/hp-wmi.ko; fi; done; depmod -a'
+Depends = make
+Depends = linux-headers

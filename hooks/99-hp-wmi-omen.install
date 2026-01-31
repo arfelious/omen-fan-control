@@ -1,0 +1,31 @@
+#!/bin/bash
+# HP Omen Fan Control - Kernel install hook for Fedora/RHEL
+# Installed to /etc/kernel/install.d/99-hp-wmi-omen.install
+
+COMMAND="$1"
+KERNEL_VERSION="$2"
+SOURCE_DIR="/usr/src/hp-wmi-omen"
+
+if [ "$COMMAND" != "add" ]; then
+    exit 0
+fi
+
+if [ ! -d "$SOURCE_DIR" ]; then
+    echo "hp-wmi-omen source not found, skipping..."
+    exit 0
+fi
+
+echo "Building hp-wmi-omen for kernel $KERNEL_VERSION..."
+
+cd "$SOURCE_DIR"
+make clean || true
+make -C "/lib/modules/$KERNEL_VERSION/build" M="$SOURCE_DIR" modules
+
+DEST_DIR="/lib/modules/$KERNEL_VERSION/kernel/drivers/platform/x86/hp"
+mkdir -p "$DEST_DIR"
+install -m 644 hp-wmi.ko "$DEST_DIR/hp-wmi.ko"
+
+depmod -a "$KERNEL_VERSION"
+dracut --force --kver "$KERNEL_VERSION" || true
+
+echo "hp-wmi-omen module installed for kernel $KERNEL_VERSION"

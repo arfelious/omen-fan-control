@@ -81,17 +81,33 @@ class FanCurveEditor(QWidget):
         path.lineTo(screen_points[-1].x(), self.margin + h)
         path.closeSubpath()
         
-        gradient = QLinearGradient(0, self.margin, 0, self.margin + h)
-        gradient.setColorAt(0, QColor(255, 50, 50, 100))
-        gradient.setColorAt(1, QColor(255, 50, 50, 10))
+        gradient = QLinearGradient(self.margin, 0, self.margin + w, 0)
+        gradient.setColorAt(0, QColor(255, 152, 0, 100)) 
+        gradient.setColorAt(1, QColor(214, 51, 51, 100))
         
         painter.setBrush(QBrush(gradient))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPath(path)
         
-        painter.setPen(QPen(self.line_color, 3))
-        for i in range(len(screen_points) - 1):
-            painter.drawLine(screen_points[i], screen_points[i+1])
+        # Line Gradient (Orange -> Red)
+        line_gradient = QLinearGradient(self.margin, 0, self.margin + w, 0)
+        line_gradient.setColorAt(0, QColor("#ff9800")) 
+        line_gradient.setColorAt(1, QColor("#d63333"))
+        
+        line_pen = QPen(QBrush(line_gradient), 3)
+        line_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        line_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        
+        painter.setPen(line_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        
+        line_path = QPainterPath()
+        if screen_points:
+            line_path.moveTo(screen_points[0])
+            for p in screen_points[1:]:
+                line_path.lineTo(p)
+        
+        painter.drawPath(line_path)
 
         for i, p in enumerate(screen_points):
             size = 12 if i == self.hover_index or i == self.dragging_index else 8

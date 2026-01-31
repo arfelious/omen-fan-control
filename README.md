@@ -54,7 +54,7 @@ sudo python3 omen_gui.py
 ```
 **GUI Fan Curve**
 
-|<img width="400" height="300" alt="Omen Fan Control GUI" src="https://github.com/user-attachments/assets/693bc41b-17ea-4e77-8653-7a66b0c71793" />|
+|<img width="400" height="300" alt="Omen Fan Control GUI" src="https://github.com/user-attachments/assets/5488a155-e387-4023-b75d-336c13ca2bc9" />|
 |---|
 
 

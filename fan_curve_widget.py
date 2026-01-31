@@ -82,7 +82,7 @@ class FanCurveEditor(QWidget):
         path.closeSubpath()
         
         gradient = QLinearGradient(self.margin, 0, self.margin + w, 0)
-        gradient.setColorAt(0, QColor(255, 152, 0, 100)) 
+        gradient.setColorAt(0, QColor(255, 220, 30, 100)) 
         gradient.setColorAt(1, QColor(214, 51, 51, 100))
         
         painter.setBrush(QBrush(gradient))

@@ -9,8 +9,9 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QProgressBar, QScrollArea, QSizePolicy, QListView, QTextEdit, QStyle, QStyledItemDelegate, QCheckBox)
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QPoint
 from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QPainter, QBrush, QPen
-from omen_logic import FanController, OMEN_FAN_DIR
-from fan_curve_widget import FanCurveEditor
+from . import get_assets_dir, get_data_dir
+from .logic import FanController
+from .fan_curve_widget import FanCurveEditor
 
 class WorkerThread(QThread):
     finished = pyqtSignal(object)
@@ -190,7 +191,7 @@ class MainWindow(QMainWindow):
         self.resize(900, 600)
         
         # Set Window Icon
-        icon_path = OMEN_FAN_DIR / "assets" / "logo_test.png"
+        icon_path = get_assets_dir() / "logo_test.png"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
         
@@ -900,13 +901,11 @@ class MainWindow(QMainWindow):
              self.svc_btn.setStyleSheet("background-color: #2e7d32;")
              
         svc_layout.addWidget(self.svc_btn)
-        
         self.svc_restart_btn = QPushButton("Restart Service")
         self.svc_restart_btn.setFixedWidth(150)
         self.svc_restart_btn.setStyleSheet("background-color: #f57c00; color: white;")
         self.svc_restart_btn.clicked.connect(self.restart_service_request)
         self.svc_restart_btn.setVisible(self.controller.is_service_installed())
-        
         svc_layout.addWidget(self.svc_restart_btn)
         svc_layout.addStretch()
         
@@ -932,7 +931,7 @@ class MainWindow(QMainWindow):
         license_text.setReadOnly(True)
         
         try:
-            with open(OMEN_FAN_DIR / "LICENSE.md", "r") as f:
+            with open(get_data_dir() / "LICENSE.md", "r") as f:
                 content = f.read()
         except Exception as e:
             content = (f"This program is free software: you can redistribute it and/or modify\n"
@@ -1047,17 +1046,6 @@ class MainWindow(QMainWindow):
         self.manual_unsaved_lbl.setVisible(False)
         self.curve_unsaved_lbl.setVisible(False)
         
-        self.manual_unsaved_lbl.setVisible(False)
-        self.curve_unsaved_lbl.setVisible(False)
-        
-        # If service is running, we just save config and let service handle it
-        if self.controller.is_service_running():
-            self.status_label.setText(f"Settings saved. Service will apply {mode} mode.")
-            # Ensure local loop is stopped
-            if hasattr(self, 'curve_timer'):
-                self.curve_timer.stop()
-            return
-
         if mode == "auto":
             self.controller.set_fan_mode("auto")
             self.status_label.setText("Set mode to Auto")
@@ -1085,11 +1073,6 @@ class MainWindow(QMainWindow):
             self.curve_timer = QTimer()
             self.curve_timer.timeout.connect(self.apply_curve_step)
         
-        # If service is running, do not run local loop
-        if self.controller.is_service_running():
-            self.curve_timer.stop()
-            return
-
         if self.mode_combo.currentText() == "Curve":
             self.curve_timer.start(2000)
         else:
@@ -1293,10 +1276,8 @@ class MainWindow(QMainWindow):
 
     def check_service_status(self):
         installed = self.controller.is_service_installed()
-        
-        if hasattr(self, 'svc_restart_btn'):
+        if hasattr(self, "svc_restart_btn"):
             self.svc_restart_btn.setVisible(installed)
-
         if not installed:
             self.svc_status_label.setText("Service: Not Installed")
             self.svc_status_label.setStyleSheet("color: #888;")
@@ -1304,17 +1285,14 @@ class MainWindow(QMainWindow):
             running = self.controller.is_service_running()
             if running:
                 self.svc_status_label.setText("Service: Active")
-                self.svc_status_label.setStyleSheet("color: #4caf50; font-weight: bold;") # Green
-                
-                # Stop local loop if service is running
-                if hasattr(self, 'curve_timer') and self.curve_timer.isActive():
-                    self.curve_timer.stop()
+                self.svc_status_label.setStyleSheet("color: #4caf50; font-weight: bold;")  # Green
             else:
                 self.svc_status_label.setText("Service: Inactive")
-                self.svc_status_label.setStyleSheet("color: #ff9800; font-weight: bold;") # Orange
-                
-                # Resume local loop if in Curve mode and service is not running
-                if self.mode_combo.currentText() == "Curve" and not (hasattr(self, 'curve_timer') and self.curve_timer.isActive()):
+                self.svc_status_label.setStyleSheet("color: #ff9800; font-weight: bold;")  # Orange
+                # Resume local curve loop if in Curve mode and timer not already active
+                if self.mode_combo.currentText() == "Curve" and not (
+                    hasattr(self, "curve_timer") and self.curve_timer.isActive()
+                ):
                     self.start_curve_loop()
 
     def restart_service_request(self):
@@ -1322,7 +1300,6 @@ class MainWindow(QMainWindow):
         self.svc_status_label.setStyleSheet("color: #ff9800; font-weight: bold;")
         self.svc_restart_btn.setEnabled(False)
         self.svc_btn.setEnabled(False)
-        
         self.restart_thread = WorkerThread(self.controller.restart_service)
         self.restart_thread.finished.connect(self.on_svc_restart_finished)
         self.restart_thread.start()
@@ -1332,12 +1309,12 @@ class MainWindow(QMainWindow):
         self.svc_btn.setEnabled(True)
         success, msg = result
         if success:
-             self.check_service_status()
-             QMessageBox.information(self, "Service", "Service successfully restarted.")
+            self.check_service_status()
+            QMessageBox.information(self, "Service", "Service successfully restarted.")
         else:
-             self.svc_status_label.setText("Restart Failed")
-             self.svc_status_label.setStyleSheet("color: #d63333; font-weight: bold;")
-             QMessageBox.critical(self, "Service Error", msg)
+            self.svc_status_label.setText("Restart Failed")
+            self.svc_status_label.setStyleSheet("color: #d63333; font-weight: bold;")
+            QMessageBox.critical(self, "Service Error", msg)
 
     def toggle_stress_test(self, checked):
         if checked:
@@ -1387,18 +1364,18 @@ class MainWindow(QMainWindow):
         self.rpm_timer.stop()
         event.accept()
 
-if __name__ == "__main__":
+def main():
     import signal
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    
     app = QApplication(sys.argv)
     app.setStyle("Windows")
-    
-    # Set App Icon
-    icon_path = OMEN_FAN_DIR / "assets" / "logo.png"
+    icon_path = get_assets_dir() / "logo.png"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
-        
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

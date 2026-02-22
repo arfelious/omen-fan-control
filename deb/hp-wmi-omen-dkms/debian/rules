@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+# HP Omen Fan Control - DKMS package build rules
+# Driver source is prepared by deb/build.sh before calling dpkg-buildpackage.
+
+export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+PKG_DIR := debian/hp-wmi-omen-dkms
+DKMS_REL := usr/src/hp-wmi-omen-1.0
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d "$(PKG_DIR)/$(DKMS_REL)"
+	install -m644 dkms.conf "$(PKG_DIR)/$(DKMS_REL)/dkms.conf"
+	sed -e 's/@PKGNAME@/hp-wmi-omen/g' -e 's/@PKGVER@/1.0/g' -i "$(PKG_DIR)/$(DKMS_REL)/dkms.conf"
+	install -d "$(PKG_DIR)/$(DKMS_REL)/src"
+	install -m644 src/Makefile "$(PKG_DIR)/$(DKMS_REL)/src/Makefile"
+	cp -r src/hp-wmi-omen "$(PKG_DIR)/$(DKMS_REL)/src/"
+
+override_dh_auto_build:
+	# Nothing to compile; driver is built by DKMS at install time
+	true
+
+override_dh_auto_configure:
+	true
+
+override_dh_auto_clean:
+	true

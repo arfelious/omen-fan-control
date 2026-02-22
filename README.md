@@ -5,9 +5,10 @@ This tool provides fan control for HP Omen Max, Victus and Omen laptops on Linux
 ## Context
 
 This tool includes a backported `hp-wmi` driver patch from the upcoming Linux 6.20 kernel, which introduces native fan control support for many devices from the following models:
-1.  **HP Omen Max**
-2.  **HP Victus**
-3.  **HP Omen**
+
+1. **HP Omen Max**
+2. **HP Victus**
+3. **HP Omen**
 
 The patch can be installed on versions before `6.20`.
 
@@ -15,65 +16,113 @@ The patch can be installed on versions before `6.20`.
 [platform/x86: hp-wmi: add manual fan control for Victus S models](https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c)
 
 This program also includes a modification that sets the max speed according to calibration if the query to get the Max RPM fails for your device.
+
 ## Tested Hardware
 
-*   **Model:** HP OMEN MAX 16-AH0001NT (8D41)
-*   **OS:** Arch Linux 6.18.6
+- **Model:** HP OMEN MAX 16-AH0001NT (8D41)
+- **OS:** Arch Linux 6.18.6
 
 ## Installation
 
-### Clone the repository
-Clone the repository or download the latest source code from the [Releases](https://github.com/arfelious/omen-fan-control/releases) page.
+Choose one of the following: **pipx/uv** (recommended), **Arch Linux packages**, or **clone + run from source**.
+
+### Option A: pipx or uv (recommended)
+
+Install the app in an isolated environment. Driver sources are bundled; you can run `install-patch` from the app.
+
+**Using pipx:**
+
+```bash
+pipx install git+https://github.com/arfelious/omen-fan-control.git
+# Then:
+sudo omen-fan-control status
+sudo omen-fan-control-gui   # GUI
+```
+
+**Using uv:**
+
+```bash
+uv tool install git+https://github.com/arfelious/omen-fan-control.git
+sudo omen-fan-control status
+sudo omen-fan-control-gui
+```
+
+**System deps (for driver build):** install kernel headers and build tools (e.g. Arch: `linux-headers base-devel`, Debian/Ubuntu: `linux-headers-$(uname -r) build-essential`).
+
+### Option B: Arch Linux (PKGBUILD)
+
+Two packages: the **DKMS kernel module** (optional; persists across kernel updates) and the **Python app**.
+
+1. **Kernel module (DKMS)** – run from the package dir (makepkg needs PKGBUILD in cwd):
+  ```bash
+  cd omen-fan-control/arch/hp-wmi-omen && makepkg -sf
+  sudo pacman -U hp-wmi-omen-dkms-*.pkg.tar.zst
+  ```
+2. **Python application** – run from the package dir:
+  ```bash
+  cd omen-fan-control/arch/omen-fan-control && makepkg -sf
+  sudo pacman -U omen-fan-control-*.pkg.tar.zst
+  ```
+   Driver data is installed under `/usr/share/omen-fan-control`; the app uses it when you run `install-patch permanent` (e.g. for calibration-based patching). Set `OMEN_FAN_CONTROL_DIR=/usr/share/omen-fan-control` if not using the provided `profile.d` snippet.
+
+### Option C: Clone and run from source (single copy under `src/`)
+
+All code and driver sources live under `src/`
 
 ```bash
 git clone https://github.com/arfelious/omen-fan-control.git
 cd omen-fan-control
 ```
 
-### Dependencies
+**Dependencies**
 
-**1. System Dependencies**
-You must install kernel headers and build tools for the driver patch to compile.
-*   **Arch:** `pacman -S linux-headers base-devel`
-*   **Debian/Ubuntu:** `apt install linux-headers-$(uname -r) build-essential`
+- **System:** kernel headers and build tools (Arch: `pacman -S linux-headers base-devel`; Debian/Ubuntu: `apt install linux-headers-$(uname -r) build-essential`).
+- **Python:** `click`, `PyQt6`. Either use **uv** (recommended) or pip.
 
-**2. Python Dependencies**
-You can install the required Python packages (`click`, `PyQt6`) via your package manager OR pip, preferably with a virtual environment.
+**Run from repo (no install)**
 
-*   **Option A: Package Manager**
-    *   **Arch:** `pacman -S python-click python-pyqt6`
-    *   **Debian/Ubuntu:** `apt install python3-click python3-pyqt6`
-
-*   **Option B: Pip**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-### Install Driver Patch
-You can install the modified driver temporarily (current session) or permanently (DKMS-style patch).
+With **uv** (adds project to path automatically):
 
 ```bash
-# Permanent Installation (Recommended)
-sudo python3 omen_cli.py install-patch permanent
-
-# Temporary Installation (Until Reboot)
-sudo python3 omen_cli.py install-patch temporary
+uv sync
+uv run omen-fan-control --help
+uv run omen-fan-control-gui
+sudo uv run omen-fan-control install-patch permanent
+sudo uv run omen-fan-control service install
 ```
 
-### Install Background Service
-For proper curve control and watchdog operation, install the background service:
+With **pip** (run the package module with `src` on `PYTHONPATH`):
 
 ```bash
-sudo python3 omen_cli.py service install
+pip install -r requirements.txt
+export PYTHONPATH=src
+python -m omen_fan_control.cli --help
+python -m omen_fan_control.gui
+sudo env PYTHONPATH=src python -m omen_fan_control.cli install-patch permanent
+sudo env PYTHONPATH=src python -m omen_fan_control.cli service install
 ```
 
-You can also install it from the settings page in the graphical interface.
+Or install the package in editable mode and use the same commands as pipx:
+
+```bash
+uv sync   # or: pip install -e .
+uv run omen-fan-control status
+sudo uv run omen-fan-control-gui
+```
+
 ## Usage
+
+- **Installed** (pipx, uv tool, or Arch): run `omen-fan-control` and `omen-fan-control-gui`.
+- **From clone:** run `uv run omen-fan-control` / `uv run omen-fan-control-gui`, or `PYTHONPATH=src python -m omen_fan_control.cli` / `python -m omen_fan_control.gui`.
+
+Examples below use `omen-fan-control`; from clone use one of the forms above.
+
 ### GUI
-A graphical interface is available for simpler configuration.
+
 ```bash
-sudo python3 omen_gui.py
+sudo omen-fan-control-gui
 ```
+
 **GUI Fan Curve**
 
 |<img width="400" height="300" alt="Omen Fan Control GUI" src="https://github.com/user-attachments/assets/57f1a966-d7a6-4c5f-8090-a1e947349bd9" />|
@@ -81,81 +130,68 @@ sudo python3 omen_gui.py
 
 
 ### CLI
-The `omen_cli.py` script manages everything.
 
-**Check Status:**
+**Check status**
+
 ```bash
-sudo python3 omen_cli.py status
-```
-**Possible Settings**
-```bash
-python omen_cli.py settings --help
-```
-**Current Settings Configuration**
-```bash
-python omen_cli.py settings
+sudo omen-fan-control status
 ```
 
-**Set Settings (Moving Average Window, etc.):**
+**Settings**
+
 ```bash
-sudo python3 omen_cli.py options --ma-window 10 --curve-interpolation smooth
+omen-fan-control settings --help
+omen-fan-control settings
+sudo omen-fan-control options --ma-window 10 --curve-interpolation smooth
 ```
 
-**Manual Fan Control:**
+**Fan control**
+
 ```bash
-# Set specific speed
-sudo python3 omen_cli.py fan-control --mode manual --value 80%
+# Manual speed
+sudo omen-fan-control fan-control --mode manual --value 80%
 
-# Set Curve Mode (requires service)
-sudo python3 omen_cli.py fan-control --mode curve
+# Curve mode (requires service)
+sudo omen-fan-control fan-control --mode curve
 
-# Set Auto (Default)
-sudo python3 omen_cli.py fan-control --mode auto
+# Auto (default)
+sudo omen-fan-control fan-control --mode auto
+
+# Custom curve CSV (temp, percent per line)
+sudo omen-fan-control fan-control --curve-csv my_curve.csv
 ```
 
-**Using Custom Curves:**
+**Other**
+
 ```bash
-sudo python3 omen_cli.py fan-control --curve-csv my_curve.csv
-```
-Where the csv file has values in `temp, percent` order
-
-<br>
-
-**Detailed Information**
-
-Commands provide detailed information when `--help` is passed with the command
-```bash
-python omen_cli.py fan-control --help
+omen-fan-control fan-control --help
 ```
 
 ## Uninstallation
 
-To remove the service and restore the original kernel driver:
-
-1.  **Remove Service:**
-    ```bash
-    sudo python3 omen_cli.py service remove
-    ```
-
-2.  **Restore Driver:**
-    ```bash
-    sudo python3 omen_cli.py install-patch restore
-    ```
-    This restores the original `.ko` files from the backups created during installation.
+1. **Remove service**
+  ```bash
+   sudo omen-fan-control service remove
+  ```
+2. **Restore original driver**
+  ```bash
+   sudo omen-fan-control install-patch restore
+  ```
+   Restores the original `.ko` files from backups created during installation.
 
 ## Disclaimer
 
 **USE AT YOUR OWN RISK.**
 Modifying kernel drivers and manipulating thermal control systems can potentially damage your hardware or cause instability. This software is provided "as is" without warranty of any kind. This was tested on my personal hardware, and the used `hp-wmi.c` is a patched version of the one in the upcoming `6.20` kernel, so your mileage may vary.
 
-<details>
-<summary>Acknowledgements</summary>
-<br>
+Acknowledgements  
+
 
 **Probes:**
-- https://github.com/alou-S/omen-fan/blob/main/docs/probes.md
+
+- [https://github.com/alou-S/omen-fan/blob/main/docs/probes.md](https://github.com/alou-S/omen-fan/blob/main/docs/probes.md)
 
 **Linux 6.20 Kernel HP-WMI Driver:**
-- https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c
 
-</details>
+- [https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c](https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c)
+

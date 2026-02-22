@@ -1,0 +1,45 @@
+#!/usr/bin/make -f
+# HP Omen Fan Control - Python application package
+# Source tree (pyproject.toml, src/, README, etc.) is prepared by deb/build.sh.
+
+export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	python3 -m build --wheel -o dist/
+
+override_dh_auto_install:
+	# Install Python wheel (entry points + module)
+	install -d debian/omen-fan-control/usr
+	python3 -m installer --compile-bytecode=0 -d debian/omen-fan-control --prefix /usr dist/omen_fan_control*.whl
+	# If installer put scripts in usr/local/bin (ignores --prefix on some setups), move to usr/bin
+	if [ -d debian/omen-fan-control/usr/local/bin ]; then \
+		install -d debian/omen-fan-control/usr/bin; \
+		mv debian/omen-fan-control/usr/local/bin/* debian/omen-fan-control/usr/bin/; \
+		rmdir debian/omen-fan-control/usr/local/bin 2>/dev/null || true; \
+		rmdir debian/omen-fan-control/usr/local 2>/dev/null || true; \
+	fi
+	# Driver data for "install-patch permanent"
+	install -d debian/omen-fan-control/usr/share/omen-fan-control/driver
+	install -m644 src/omen_fan_control/data/driver/dkms.conf debian/omen-fan-control/usr/share/omen-fan-control/driver/
+	install -d debian/omen-fan-control/usr/share/omen-fan-control/driver/src
+	install -m644 src/omen_fan_control/data/driver/src/Makefile debian/omen-fan-control/usr/share/omen-fan-control/driver/src/
+	cp -r src/omen_fan_control/data/driver/hp-wmi-omen debian/omen-fan-control/usr/share/omen-fan-control/driver/
+	install -m755 src/omen_fan_control/data/driver/install_driver.sh debian/omen-fan-control/usr/share/omen-fan-control/driver/
+	install -d debian/omen-fan-control/usr/share/omen-fan-control/driver/hooks
+	for f in src/omen_fan_control/data/driver/hooks/*; do [ -f "$$f" ] && install -m644 "$$f" debian/omen-fan-control/usr/share/omen-fan-control/driver/hooks/$$(basename "$$f"); done
+	# systemd service
+	install -d debian/omen-fan-control/usr/lib/systemd/system
+	sed 's|@EXECSTART@|/usr/bin/omen-fan-control serve|g' src/omen_fan_control/data/omen-fan-control.service > debian/omen-fan-control/usr/lib/systemd/system/omen-fan-control.service
+	chmod 644 debian/omen-fan-control/usr/lib/systemd/system/omen-fan-control.service
+	# profile.d
+	install -d debian/omen-fan-control/etc/profile.d
+	printf '%s\n' 'export OMEN_FAN_CONTROL_DIR=/usr/share/omen-fan-control' > debian/omen-fan-control/etc/profile.d/omen-fan-control.sh
+	chmod 644 debian/omen-fan-control/etc/profile.d/omen-fan-control.sh
+
+override_dh_usrlocal:
+	# Scripts are in usr/bin; nothing to relocate from usr/local
+	true

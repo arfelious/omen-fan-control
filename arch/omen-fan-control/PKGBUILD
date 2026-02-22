@@ -1,0 +1,59 @@
+# Python application: CLI and GUI for HP Omen/Victus fan control
+# Install driver separately (hp-wmi-omen-dkms) or use "omen-fan-control install-patch" from this app.
+pkgname=omen-fan-control
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Fan control for HP Omen Max, Victus and Omen laptops on Linux (CLI + GUI)"
+url="https://github.com/arfelious/omen-fan-control"
+license=("GPL-3.0-or-later")
+arch=("any")
+depends=("python-click" "python-pyqt6")
+makedepends=("python-build" "python-installer" "python-hatchling")
+optdepends=("hp-wmi-omen-dkms: persist patched driver across kernel updates")
+source=("PKGBUILD")
+sha256sums=("SKIP")
+
+prepare() {
+  local reporoot
+  if [[ -f "$startdir/pyproject.toml" ]]; then
+    reporoot="$startdir"
+  else
+    reporoot="$startdir/../.."
+  fi
+  cp -f "$reporoot/pyproject.toml" "$srcdir/"
+  cp -f "$reporoot/README.md" "$reporoot/LICENSE.md" "$srcdir/" 2>/dev/null || true
+  cp -r "$reporoot/src" "$srcdir/"
+}
+
+build() {
+  cd "$srcdir"
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  local whl
+  whl=$(echo "$srcdir"/dist/omen_fan_control*.whl)
+  python -m installer --compile-bytecode=0 -d "$pkgdir" "$whl"
+
+  # Driver data for "install-patch permanent" (same layout as hp-wmi-omen-dkms: dkms.conf + hp-wmi-omen/)
+  local driver="$srcdir/src/omen_fan_control/data/driver"
+  install -Dm644 "$driver/dkms.conf" "$pkgdir/usr/share/omen-fan-control/driver/dkms.conf"
+  cp -dr --no-preserve=ownership "$driver/hp-wmi-omen" "$pkgdir/usr/share/omen-fan-control/driver/"
+  install -Dm755 "$driver/install_driver.sh" "$pkgdir/usr/share/omen-fan-control/driver/install_driver.sh"
+  install -dm755 "$pkgdir/usr/share/omen-fan-control/driver/hooks"
+  for f in "$driver/hooks/"*; do
+    [[ -f "$f" ]] && install -Dm644 "$f" "$pkgdir/usr/share/omen-fan-control/driver/hooks/$(basename "$f")"
+  done
+
+  # systemd service (placeholder @EXECSTART@ replaced with installed executable path)
+  install -dm755 "$pkgdir/usr/lib/systemd/system"
+  sed 's|@EXECSTART@|/usr/bin/omen-fan-control serve|g' \
+    "$srcdir/src/omen_fan_control/data/omen-fan-control.service" \
+    > "$pkgdir/usr/lib/systemd/system/omen-fan-control.service"
+  chmod 644 "$pkgdir/usr/lib/systemd/system/omen-fan-control.service"
+
+  # profile.d so OMEN_FAN_CONTROL_DIR is set for all users
+  install -dm755 "$pkgdir/etc/profile.d"
+  printf '%s\n' 'export OMEN_FAN_CONTROL_DIR=/usr/share/omen-fan-control' > "$pkgdir/etc/profile.d/omen-fan-control.sh"
+  chmod 644 "$pkgdir/etc/profile.d/omen-fan-control.sh"
+}

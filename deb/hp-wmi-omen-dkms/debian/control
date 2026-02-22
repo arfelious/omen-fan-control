@@ -1,0 +1,16 @@
+Source: hp-wmi-omen-dkms
+Section: kernel
+Priority: optional
+Maintainer: Arfelious <https://github.com/arfelious>
+Build-Depends: debhelper-compat (= 13), dkms
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/arfelious/omen-fan-control
+
+Package: hp-wmi-omen-dkms
+Architecture: all
+Depends: ${misc:Depends}, dkms
+Description: Patched hp-wmi driver for HP Omen/Victus fan control (DKMS)
+ This DKMS package builds a patched hp-wmi kernel module that exposes
+ fan control (pwm1) for HP Omen Max, Victus and Omen laptops on kernels
+ before 6.20. Linux 6.20+ includes equivalent support upstream.

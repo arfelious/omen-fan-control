@@ -191,7 +191,13 @@ class FanCurveEditor(QWidget):
         return [(p.x(), p.y()) for p in self.points]
 
     def set_points(self, points):
-        self.points = [QPointF(x, y) for x, y in points]
+        if points is None:
+            self.points = [
+                QPointF(30, 0), QPointF(40, 10), QPointF(50, 25), QPointF(60, 40),
+                QPointF(70, 55), QPointF(80, 70), QPointF(90, 85), QPointF(95, 100), QPointF(105, 100),
+            ]
+        else:
+            self.points = [QPointF(x, y) for x, y in points]
         if self.points:
              last = self.points[-1]
              if last.x() != self.max_temp:

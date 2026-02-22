@@ -1,0 +1,24 @@
+Source: omen-fan-control
+Section: utils
+Priority: optional
+Maintainer: Arfelious <https://github.com/arfelious>
+Build-Depends: debhelper-compat (= 13),
+               python3-build,
+               python3-installer,
+               python3-hatchling
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/arfelious/omen-fan-control
+
+Package: omen-fan-control
+Architecture: all
+Depends: ${misc:Depends},
+         python3,
+         python3-click,
+         python3-pyqt6
+Suggests: hp-wmi-omen-dkms
+Description: Fan control for HP Omen Max, Victus and Omen laptops (CLI + GUI)
+ CLI and GUI to control fan speed on supported HP Omen and Victus laptops
+ on Linux. Install hp-wmi-omen-dkms for persistent patched driver across
+ kernel updates, or use "omen-fan-control install-patch permanent" from
+ this package.

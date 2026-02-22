@@ -1,11 +1,11 @@
 #!/bin/bash
 # HP Omen Fan Control - Kernel update hook for Debian/Ubuntu
-# Installed to /etc/kernel/postinst.d/zz-hp-wmi-omen
+# Builds from /usr/src/hp-wmi-omen-1.0/src/hp-wmi-omen (same as DKMS package layout)
 
 set -e
 
 KERNEL_VERSION="$1"
-SOURCE_DIR="/usr/src/hp-wmi-omen"
+SOURCE_DIR="/usr/src/hp-wmi-omen-1.0/src/hp-wmi-omen"
 
 if [ ! -d "$SOURCE_DIR" ]; then
     echo "hp-wmi-omen source not found, skipping..."
@@ -13,7 +13,6 @@ if [ ! -d "$SOURCE_DIR" ]; then
 fi
 
 echo "Building hp-wmi-omen for kernel $KERNEL_VERSION..."
-
 cd "$SOURCE_DIR"
 make clean || true
 make -C "/lib/modules/$KERNEL_VERSION/build" M="$SOURCE_DIR" modules

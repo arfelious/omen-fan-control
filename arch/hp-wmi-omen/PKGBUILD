@@ -1,0 +1,40 @@
+# DKMS kernel module: patched hp-wmi for HP Omen/Victus fan control (Linux < 6.20)
+_pkgbase=hp-wmi-omen
+pkgname="${_pkgbase}-dkms"
+pkgver=1.0
+pkgrel=1
+pkgdesc="Patched hp-wmi driver for HP Omen/Victus fan control (DKMS; for kernels < 6.20)"
+url="https://github.com/arfelious/omen-fan-control"
+license=("GPL")
+arch=("x86_64")
+depends=('glibc' 'dkms')
+makedepends=()
+conflicts=()
+provides=("hp-wmi-omen")
+source=("PKGBUILD")
+sha256sums=("SKIP")
+
+prepare() {
+  # Copy driver from repo (same layout as betel: dkms.conf + src/Makefile + src/hp-wmi-omen/)
+  local reporoot
+  if [[ -f "$startdir/src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c" ]]; then
+    reporoot="$startdir"
+  else
+    reporoot="$startdir/../.."
+  fi
+  local driver="$reporoot/src/omen_fan_control/data/driver"
+  cp -f "$driver/dkms.conf" "$srcdir/"
+  mkdir -p "$srcdir/src"
+  cp -f "$driver/src/Makefile" "$srcdir/src/"
+  cp -dr --no-preserve=ownership "$driver/hp-wmi-omen" "$srcdir/src/"
+}
+
+package() {
+  local dkms_dir="/usr/src/${_pkgbase}-${pkgver}"
+  install -Dm644 dkms.conf "${pkgdir}${dkms_dir}/dkms.conf"
+  sed -e "s/@PKGNAME@/${_pkgbase}/g" \
+      -e "s/@PKGVER@/${pkgver}/g" \
+      -i "${pkgdir}${dkms_dir}/dkms.conf"
+  install -Dm644 src/Makefile "${pkgdir}${dkms_dir}/src/Makefile"
+  cp -dr --no-preserve=ownership "./src/hp-wmi-omen" "${pkgdir}${dkms_dir}/src"
+}

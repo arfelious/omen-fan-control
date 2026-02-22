@@ -1,10 +1,10 @@
 #!/bin/bash
 # HP Omen Fan Control - Kernel install hook for Fedora/RHEL
-# Installed to /etc/kernel/install.d/99-hp-wmi-omen.install
+# Builds from /usr/src/hp-wmi-omen-1.0/src/hp-wmi-omen (same as DKMS package layout)
 
 COMMAND="$1"
 KERNEL_VERSION="$2"
-SOURCE_DIR="/usr/src/hp-wmi-omen"
+SOURCE_DIR="/usr/src/hp-wmi-omen-1.0/src/hp-wmi-omen"
 
 if [ "$COMMAND" != "add" ]; then
     exit 0
@@ -16,7 +16,6 @@ if [ ! -d "$SOURCE_DIR" ]; then
 fi
 
 echo "Building hp-wmi-omen for kernel $KERNEL_VERSION..."
-
 cd "$SOURCE_DIR"
 make clean || true
 make -C "/lib/modules/$KERNEL_VERSION/build" M="$SOURCE_DIR" modules

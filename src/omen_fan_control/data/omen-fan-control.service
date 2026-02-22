@@ -1,0 +1,15 @@
+[Unit]
+Description=HP Omen Fan Control Service
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=@EXECSTART@
+WorkingDirectory=/
+Restart=on-failure
+StartLimitBurst=5
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

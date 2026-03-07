@@ -421,6 +421,44 @@ class FanController:
             
         return True, "Patch applied successfully."
 
+    @staticmethod
+    def _format_make_error(stderr: str) -> str:
+        """Parse make/build stderr and return a user-friendly message.
+
+        Detects common kernel-module build failures (e.g. missing
+        generated/autoconf.h on Debian) and appends actionable fix
+        instructions so the user doesn't have to search the web.
+        """
+        hint = ""
+        if "generated/autoconf.h" in stderr:
+            hint = (
+                "\n\n--- Likely cause ---\n"
+                "Your kernel headers are incomplete (generated/autoconf.h is missing).\n"
+                "This is a known issue on Debian/Ubuntu where headers are split into two packages.\n\n"
+                "Fix:\n"
+                "  sudo apt reinstall linux-headers-$(uname -r)\n\n"
+                "Diagnostic (check if autoconf.h is present):\n"
+                "  ls /usr/src/linux-headers-$(uname -r)/include/generated/"
+            )
+        elif "No such file or directory" in stderr and "scripts/basic/Makefile" in stderr:
+            hint = (
+                "\n\n--- Likely cause ---\n"
+                "Kernel build scripts (kbuild) are missing.\n"
+                "This is a common issue on Debian/Ubuntu where headers are split across packages.\n\n"
+                "Fix:\n"
+                "  Debian/Ubuntu: sudo apt install \"linux-kbuild-$(uname -r | cut -d. -f1,2,3 | cut -d+ -f1)*\"\n"
+            )
+        elif "No such file or directory" in stderr and "/lib/modules/" in stderr:
+            hint = (
+                "\n\n--- Likely cause ---\n"
+                "Kernel headers not found for the running kernel.\n\n"
+                "Fix:\n"
+                "  Debian/Ubuntu : sudo apt install linux-headers-$(uname -r)\n"
+                "  Fedora/RHEL   : sudo dnf install kernel-devel-$(uname -r)\n"
+                "  Arch Linux    : sudo pacman -S linux-headers"
+            )
+        return f"Make failed: {stderr}{hint}"
+
     def install_driver_temp(self, force=False):
         """Installs driver temporarily using insmod. Requires calibration first."""
         if self.pwm1_path and self.pwm1_path.exists():
@@ -439,7 +477,7 @@ class FanController:
         try:
             subprocess.run(["make"], check=True, cwd=OMEN_FAN_DIR, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
-            return False, f"Make failed: {e.stderr}"
+            return False, self._format_make_error(e.stderr)
         
         ko_files = list(OMEN_FAN_DIR.glob("*.ko"))
         if not ko_files:
@@ -457,8 +495,6 @@ class FanController:
         except subprocess.CalledProcessError as e:
              subprocess.run(["modprobe", "hp-wmi"], check=False)
              return False, f"Insmod failed: {e.stderr}\n(Original driver re-loaded attempts)"
-        
-        subprocess.run(["make", "clean"], check=True, cwd=OMEN_FAN_DIR)
         
         self.config["install_type"] = "temporary"
         self.save_config()
@@ -481,9 +517,9 @@ class FanController:
             return False, msg
 
         try:
-            subprocess.run(["/bin/bash", "install_driver.sh"], cwd=OMEN_FAN_DIR, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            return False, f"Install script failed: {e.stderr}"
+            subprocess.run(["/bin/bash", "install_driver.sh"], cwd=OMEN_FAN_DIR, check=True)
+        except subprocess.CalledProcessError:
+            return False, "Install script failed. Check terminal output above for details."
             
         self.config["install_type"] = "permanent"
         self.save_config()

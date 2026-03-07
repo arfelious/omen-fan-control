@@ -97,7 +97,11 @@ static int hp_wmi_compat_set(struct platform_profile_handler *pph,
 }
 static void hp_wmi_compat_remove_cb(void *data)
 {
+#ifdef OMEN_PP_REMOVE_TAKES_DEVICE
+  platform_profile_remove(data);
+#else
   platform_profile_remove();
+#endif
 }
 static struct device *devm_platform_profile_register(
     struct device *dev, const char *name, void *drvdata,
@@ -143,7 +147,11 @@ static int hp_wmi_compat_set_int(struct platform_profile_handler *pph,
 }
 static void hp_wmi_compat_remove_int(void *data)
 {
+#ifdef OMEN_PP_REMOVE_TAKES_DEVICE
+  platform_profile_remove(data);
+#else
   platform_profile_remove();
+#endif
 }
 static struct device *devm_platform_profile_register(
     struct device *dev, const char *name, void *drvdata,
@@ -2561,14 +2569,26 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv) {
   /* Default behaviour on hwmon init is automatic mode */
   priv->mode = PWM_MODE_AUTO;
 
-  /* Bypass all non-Victus S devices */
+  /* Initialize defaults for all supported devices */
+  priv->min_rpm = 0;
+  priv->gpu_delta = 0;
+  priv->max_rpm = OMEN_MAX_RPM;
+
+  ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_MAX_GET_QUERY, HPWMI_GM, &max_val,
+                             sizeof(max_val), sizeof(max_val));
+  if (!ret && max_val != 0) {
+    pr_info("HP WMI: Hardware reported Max RPM: %d000\n", max_val);
+    priv->max_rpm = max_val;
+  }
+
+  /* Bypass detailed table parsing for non-Victus S devices */
   if (!is_victus_s_thermal_profile())
     return 0;
 
   ret = hp_wmi_perform_query(HPWMI_VICTUS_S_GET_FAN_TABLE_QUERY, HPWMI_GM,
                              &fan_data, 4, sizeof(fan_data));
   if (ret)
-    return ret;
+    return 0; /* Fall back to defaults if table query fails */
 
   fan_table = (struct victus_s_fan_table *)fan_data;
   if (fan_table->header.num_entries == 0 ||
@@ -2576,22 +2596,6 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv) {
               sizeof(struct victus_s_fan_table_entry) *
                   fan_table->header.num_entries >
           sizeof(fan_data)) {
-    ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_MAX_GET_QUERY, HPWMI_GM,
-                               &max_val, sizeof(max_val), sizeof(max_val));
-    if (ret) {
-      pr_warn("HP WMI: Could not query Max RPM. Defaulting to 6000.\n");
-      priv->max_rpm = OMEN_MAX_RPM;
-    } else {
-      pr_info("HP WMI: Hardware reported Max RPM: %d000\n", max_val);
-      if (max_val != 0) {
-        priv->max_rpm = max_val;
-      } else {
-        pr_info("HP WMI: Ignoring hardware reported value\n");
-        priv->max_rpm = OMEN_MAX_RPM;
-      }
-    }
-    priv->min_rpm = 0;
-    priv->gpu_delta = 0;
     return 0;
   }
 

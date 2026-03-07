@@ -1041,11 +1041,18 @@ class MainWindow(QMainWindow):
                     "Go to 'Driver Management' to install it.")
                 return
 
+        # Always update and save config first so service can see it
         self.controller.config["mode"] = mode
-        self.controller.save_config()
         
-        self.manual_unsaved_lbl.setVisible(False)
-        self.curve_unsaved_lbl.setVisible(False)
+        if mode == "manual":
+            percent = self.manual_spin.value()
+            pwm_val = int(round(percent / 100 * 255))
+            self.controller.config["manual_pwm"] = pwm_val
+        elif mode == "curve":
+            points = self.curve_editor.get_points()
+            self.controller.config["curve"] = points
+            
+        self.controller.save_config()
         
         self.manual_unsaved_lbl.setVisible(False)
         self.curve_unsaved_lbl.setVisible(False)
@@ -1058,6 +1065,7 @@ class MainWindow(QMainWindow):
                 self.curve_timer.stop()
             return
 
+        # Local application for non-service users
         if mode == "auto":
             self.controller.set_fan_mode("auto")
             self.status_label.setText("Set mode to Auto")
@@ -1065,18 +1073,10 @@ class MainWindow(QMainWindow):
             self.controller.set_fan_mode("max")
             self.status_label.setText("Set mode to Max")
         elif mode == "manual":
-            percent = self.manual_spin.value()
-            pwm_val = int(round(percent / 100 * 255))
-            
-            self.controller.config["manual_pwm"] = pwm_val
-            self.controller.save_config()
-            
+            pwm_val = self.controller.config["manual_pwm"]
             self.controller.set_fan_pwm(pwm_val)
-            self.status_label.setText(f"Set manual speed to {percent}% (PWM: {pwm_val})")
+            self.status_label.setText(f"Set manual speed to {self.manual_spin.value()}% (PWM: {pwm_val})")
         elif mode == "curve":
-            points = self.curve_editor.get_points()
-            self.controller.config["curve"] = points
-            self.controller.save_config()
             self.status_label.setText("Curve mode enabled")
             self.start_curve_loop()
 

@@ -25,6 +25,74 @@ detect_distro() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# Pre-flight: verify kernel headers are complete enough for an OOT build.
+# ---------------------------------------------------------------------------
+check_build_env() {
+    local kver
+    kver="$(uname -r)"
+    local build_dir="/lib/modules/${kver}/build"
+
+    if [ ! -d "$build_dir" ]; then
+        echo ""
+        echo "ERROR: Kernel build directory not found: $build_dir"
+        echo ""
+        echo "  Install kernel headers for your running kernel:"
+        echo "    Debian/Ubuntu : sudo apt install linux-headers-${kver}"
+        echo "    Fedora/RHEL   : sudo dnf install kernel-devel-${kver}"
+        echo "    Arch Linux    : sudo pacman -S linux-headers"
+        echo ""
+        exit 1
+    fi
+
+    # Resolve symlink to get the real directory (arch-specific on Debian)
+    local real_dir
+    real_dir="$(readlink -f "$build_dir")"
+
+    if [ ! -f "${real_dir}/include/generated/autoconf.h" ]; then
+        echo ""
+        echo "ERROR: include/generated/autoconf.h not found under $real_dir"
+        echo ""
+        echo "  Your kernel headers appear to be incomplete."
+
+        if [ -f /etc/debian_version ]; then
+            echo ""
+            echo "  Debian/Ubuntu fix:"
+            echo "    sudo apt reinstall linux-headers-${kver}"
+            echo ""
+            echo "  Diagnostic (check if autoconf.h is present):"
+            echo "    ls ${real_dir}/include/generated/"
+        else
+            echo ""
+            echo "  Reinstall your kernel headers package and try again."
+        fi
+        echo ""
+        exit 1
+    fi
+
+    # Check for missing kbuild scripts (common issue on Debian/Ubuntu)
+    if [ ! -f "${real_dir}/scripts/basic/Makefile" ] && [ ! -f "${build_dir}/scripts/basic/Makefile" ]; then
+        echo ""
+        echo "ERROR: scripts/basic/Makefile not found."
+        echo ""
+        echo "  Your kernel build environment is missing kbuild scripts."
+        
+        if [ -f /etc/debian_version ]; then
+            # Extract version including patch (e.g., 6.12.73)
+            local kbuild_ver
+            kbuild_ver="$(echo "$kver" | cut -d. -f1,2,3 | cut -d+ -f1)"
+            echo ""
+            echo "  Debian/Ubuntu fix:"
+            echo "    sudo apt install \"linux-kbuild-${kbuild_ver}*\""
+        else
+            echo ""
+            echo "  Reinstall your kernel headers/build package."
+        fi
+        echo ""
+        exit 1
+    fi
+}
+
 install_with_dkms() {
     echo "Installing with DKMS..."
     
@@ -152,6 +220,9 @@ update_initramfs() {
 main() {
     echo "=== HP Omen Fan Control - Permanent Installation ==="
     
+    # Verify the kernel build environment before doing anything else
+    check_build_env
+
     DISTRO=$(detect_distro)
     echo "Detected distro: $DISTRO"
     

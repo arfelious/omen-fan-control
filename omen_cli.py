@@ -170,13 +170,15 @@ def install_patch(install_type, temp, perm, restore):
 @click.option('--mode', type=click.Choice(['auto', 'max', 'manual', 'curve', 'last']), help="Set fan mode. 'last' loads from config.")
 @click.option('--value', required=False, help="Manual value: 0-255 (PWM) or 0-100% (e.g. '50%')")
 @click.option('--curve-csv', required=False, type=click.Path(exists=True), help="CSV file for curve mode (format: temp,percent)")
+@click.option('--no-save', is_flag=True, help="Apply changes temporarily without saving to config.")
 @click.argument('action', required=False)
-def fan_control(mode, value, curve_csv, action):
+def fan_control(mode, value, curve_csv, no_save, action):
     """
     Control fan mode and speed.
     Usage:
       fan-control --mode auto
       fan-control set  (Applies last saved mode)
+      fan-control --mode manual --value 50% --no-save (Temporary)
     """
     if mode is None:
         if curve_csv:
@@ -192,7 +194,9 @@ def fan_control(mode, value, curve_csv, action):
 
     from pathlib import Path
     default_conf = Path("/etc/omen-fan-control/config.json")
-    if controller.is_service_running() and controller.config_path.resolve() != default_conf.resolve():
+    service_active = controller.is_service_running()
+    
+    if service_active and controller.config_path.resolve() != default_conf.resolve() and not no_save:
         click.echo(click.style("WARNING: Background service is active using system config.", fg="yellow"))
         click.echo(click.style(f"It will likely overwrite your changes from {controller.config_path.name} immediately.", fg="yellow"))
         click.echo("Suggestion: Stop the service ('omen_cli.py service stop') before testing custom configs.\n")
@@ -201,11 +205,25 @@ def fan_control(mode, value, curve_csv, action):
         mode = controller.config.get("mode", "auto")
         click.echo(f"Applying last saved mode: {mode.upper()}")
     
+    if no_save:
+        if mode == 'curve':
+            if not service_active:
+                click.echo(click.style("WARNING: Service is NOT running. Curve mode requires the service.", fg="yellow"))
+                click.echo("Changes will be written to volatile config but won't take effect until service starts.")
+        else:
+            if service_active:
+                click.echo("Stopping service for temporary manual control...")
+                controller.stop_service()
+    
     if mode == 'auto':
         controller.set_fan_mode('auto')
+        controller.config["mode"] = "auto"
+        controller.save_config(volatile=no_save)
         click.echo("Fan set to AUTO.")
     elif mode == 'max':
         controller.set_fan_mode('max')
+        controller.config["mode"] = "max"
+        controller.save_config(volatile=no_save)
         click.echo("Fan set to MAX.")
     elif mode == 'manual':
         # Check driver requirement
@@ -238,7 +256,7 @@ def fan_control(mode, value, curve_csv, action):
             
             controller.config["mode"] = "manual"
             controller.config["manual_pwm"] = pwm_val
-            controller.save_config()
+            controller.save_config(volatile=no_save)
             controller.set_fan_pwm(pwm_val)
             
         except ValueError:
@@ -285,21 +303,25 @@ def fan_control(mode, value, curve_csv, action):
                 return
 
         controller.config["mode"] = "curve"
-        controller.save_config()
+        controller.save_config(volatile=no_save)
         click.echo("Curve mode enabled in config.")
         
-        if not controller.is_service_installed():
+        if not controller.is_service_installed() and not no_save:
              click.echo("WARNING: Background service is NOT installed/running. Curve mode requires the service to be active.")
              click.echo("Run 'omen_cli.py install-patch perm' (if needed) and ensure service is started.")
              click.echo("   sudo systemctl start omen-fan-control.service")
              click.echo("Or run 'omen_cli.py serve' manually to keep it running.")
         else:
-             click.echo("Service should pick up the change automatically.")
+             if no_save:
+                 click.echo("Service should pick up the temporary change automatically.")
+             else:
+                 click.echo("Service should pick up the change automatically.")
 
 @cli.command()
 def serve():
     """Run the fan control daemon (foreground). Used by systemd service."""
     import time
+    from omen_logic import FanController, OMEN_FAN_DIR, VOLATILE_CONFIG_FILE
     controller = get_controller()
     click.echo("Starting Omen Fan Control Daemon...")
     
@@ -311,14 +333,21 @@ def serve():
     hysteresis_start_time = None
     
     last_config_mtime = 0
+    last_volatile_mtime = 0
     
     while True:
         try:
             try:
+                # Watch both persistent and volatile config
                 current_mtime = controller.config_path.stat().st_mtime
-                if current_mtime > last_config_mtime:
+                current_v_mtime = 0
+                if VOLATILE_CONFIG_FILE.exists():
+                    current_v_mtime = VOLATILE_CONFIG_FILE.stat().st_mtime
+                
+                if current_mtime > last_config_mtime or current_v_mtime > last_volatile_mtime:
                     controller.config = controller.load_config()
                     last_config_mtime = current_mtime
+                    last_volatile_mtime = current_v_mtime
             except Exception:
                 # If file doesn't exist or error, ignore
                 pass
@@ -582,6 +611,22 @@ def restart_service_cmd():
     controller = get_controller()
     click.echo("Restarting background service...")
     success, msg = controller.restart_service()
+    click.echo(msg)
+
+@service.command(name="start")
+def start_service_cmd():
+    """Start the background service"""
+    controller = get_controller()
+    click.echo("Starting background service...")
+    success, msg = controller.start_service()
+    click.echo(msg)
+
+@service.command(name="stop")
+def stop_service_cmd():
+    """Stop the background service"""
+    controller = get_controller()
+    click.echo("Stopping background service...")
+    success, msg = controller.stop_service()
     click.echo(msg)
     
 @service.command(name="status")

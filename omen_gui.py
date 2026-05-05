@@ -1391,6 +1391,28 @@ if __name__ == "__main__":
     import signal
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     
+    # Pre-flight Display Check
+    if os.name == 'posix':
+        display = os.environ.get("DISPLAY")
+        if not display:
+            print("Error: No DISPLAY environment variable found.")
+            print("If you are running via SSH, ensure X11 forwarding is enabled (-X or -Y).")
+            print("If you are running via sudo, try 'sudo -E python3 omen_gui.py' or 'pkexec python3 omen_gui.py'.")
+            sys.exit(1)
+        
+        # Check if we can actually connect to X (prevents obscure segments faults/Qt errors)
+        try:
+            from subprocess import run, DEVNULL
+            res = run(["xset", "q"], stdout=DEVNULL, stderr=DEVNULL)
+            if res.returncode != 0 and os.geteuid() == 0:
+                 print(f"Warning: Could not connect to display {display} as root.")
+                 print("This is likely a permission issue with Xauthority.")
+                 print("Fix: Use 'pkexec python3 omen_gui.py' or 'sudo -E python3 omen_gui.py'.")
+                 # We don't exit here as xset might not be installed, 
+                 # but we provide the hint.
+        except Exception:
+            pass
+    
     app = QApplication(sys.argv)
     app.setStyle("Windows")
     

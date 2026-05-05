@@ -207,12 +207,26 @@ reload_driver() {
 
 update_initramfs() {
     echo "Updating initramfs..."
+    local failed=0
     if command -v update-initramfs >/dev/null; then
-        sudo update-initramfs -u
+        sudo update-initramfs -u || failed=1
     elif command -v mkinitcpio >/dev/null; then
-        sudo mkinitcpio -P
+        sudo mkinitcpio -P || failed=1
     elif command -v dracut >/dev/null; then
-        sudo dracut --force
+        # Try standard dracut, then fallback with explicit kver if first fails
+        if ! sudo dracut --force; then
+            echo "Standard dracut failed, trying with explicit kernel version..."
+            sudo dracut --force --kver "$(uname -r)" || failed=1
+        fi
+    fi
+
+    if [ $failed -eq 1 ]; then
+        echo ""
+        echo "WARNING: initramfs update failed or returned an error."
+        echo "This sometimes happens on Garuda/Arch with non-standard EFI layouts."
+        echo "The driver is installed, but you may need to manually update your boot image"
+        echo "if it doesn't persist after a reboot."
+        echo ""
     fi
 }
 

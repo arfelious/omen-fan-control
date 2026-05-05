@@ -34,6 +34,9 @@ else:
     CONFIG_DIR = Path(os.path.expanduser("~/.config/omen-fan-control"))
 
 CONFIG_FILE = CONFIG_DIR / "config.json"
+VOLATILE_CONFIG_DIR = Path("/run/omen-fan-control")
+VOLATILE_CONFIG_FILE = VOLATILE_CONFIG_DIR / "config.json"
+
 DEFAULT_CALIBRATION_WAIT = 30
 DEFAULT_WATCHDOG_INTERVAL = 90
 OMEN_FAN_DIR = Path(__file__).parent.absolute()
@@ -52,7 +55,8 @@ SUPPORTED_BOARDS = {
     "8A15", "8A42", "8BAD", "8E41",
     
     "88F8", "8A25",
-    "8BAB", "8BBE", "8BD4", "8BD5", "8C78", "8BCD", "8C99", "8C9C", "8D41"
+    "8BAB", "8BBE", "8BCA", "8BD4", "8BD5", "8C76", "8C77", "8C78", "8BCD",
+    "8C99", "8C9C", "8D41", "8D87", "8A44", "8A4D", "8C58", "8BA9"
 }
 
 POSSIBLY_SUPPPORTED_OMEN_BOARDS = {
@@ -125,6 +129,7 @@ class FanController:
         self.pwm1_enable_path = self.hwmon_path / "pwm1_enable"
         self.pwm1_path = self.hwmon_path / "pwm1"
         self.fan1_input_path = self.hwmon_path / "fan1_input"
+        self.fan2_input_path = self.hwmon_path / "fan2_input"
         self.cpu_temp_path = self._find_cpu_temp_path()
 
     def _find_cpu_temp_path(self):
@@ -152,7 +157,7 @@ class FanController:
 
 
     def load_config(self):
-        """Loads configuration from JSON file."""
+        """Loads configuration from JSON file. Merges with volatile config if present."""
         defaults = {
             "version": CONFIG_VERSION,
             "fan_max": 0,
@@ -171,28 +176,37 @@ class FanController:
             "debug_experimental_ui": True
         }
         
-        if not self.config_path.exists():
-            return defaults
-            
-        try:
-            with open(self.config_path, "r") as f:
-                data = json.load(f)
-            
-            config = defaults.copy()
-            config.update(data)
-            return config
-            
-        except Exception as e:
-            print(f"Error loading config: {e}")
-            return defaults
+        config = defaults.copy()
+        
+        # 1. Load persistent config
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, "r") as f:
+                    data = json.load(f)
+                config.update(data)
+            except Exception as e:
+                print(f"Error loading persistent config: {e}")
 
-    def save_config(self):
-        """Saves current configuration to JSON file."""
-        if self.config_path.parent:
-             self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        # 2. Merge volatile config if it exists
+        if VOLATILE_CONFIG_FILE.exists():
+            try:
+                with open(VOLATILE_CONFIG_FILE, "r") as f:
+                    v_data = json.load(f)
+                config.update(v_data)
+            except Exception as e:
+                print(f"Error loading volatile config: {e}")
+                
+        return config
+
+    def save_config(self, volatile=False):
+        """Saves current configuration to JSON file. Use volatile=True for /run."""
+        target_path = VOLATILE_CONFIG_FILE if volatile else self.config_path
+        
+        if target_path.parent:
+             target_path.parent.mkdir(parents=True, exist_ok=True)
         
         self.config["version"] = CONFIG_VERSION
-        with open(self.config_path, "w") as f:
+        with open(target_path, "w") as f:
             json.dump(self.config, f, indent=4)
 
     def write_sys_file(self, path, value):
@@ -219,12 +233,21 @@ class FanController:
             return None
 
     def get_fan_speed(self):
-        """Returns current fan speed in RPM."""
-        val = self.read_sys_file(self.fan1_input_path)
-        if not val:
-            print("Failed to read fan speed")
-            return 0
-        return int(val)
+        """Returns current fan speed in RPM. Returns max if multiple fans found."""
+        val1 = self.read_sys_file(self.fan1_input_path)
+        val2 = self.read_sys_file(self.fan2_input_path)
+        
+        rpm1 = int(val1) if val1 else 0
+        rpm2 = int(val2) if val2 else 0
+        
+        if rpm1 == 0 and rpm2 == 0:
+            if self.fan1_input_path and not self.fan1_input_path.exists():
+                 # Driver might not be providing fan speed attributes
+                 pass
+            elif val1 is None and val2 is None:
+                 print("Failed to read fan speed (No fan*_input paths)")
+        
+        return max(rpm1, rpm2)
 
     def get_cpu_temp(self):
         """Returns CPU temp in Celsius."""
@@ -393,10 +416,18 @@ class FanController:
                 profile = self.config.get("thermal_profile", "omen")
                 
                 target_array = "omen_thermal_profile_boards"
+                params_struct = "victus_s_thermal_params" # Default
+                
                 if profile == "victus":
                     target_array = "victus_thermal_profile_boards"
-                elif profile == "victus_s":
+                elif profile in ["victus_s", "omen_v1", "omen_v1_legacy", "omen_v1_no_ec"]:
                     target_array = "victus_s_thermal_profile_boards"
+                    if profile == "omen_v1":
+                        params_struct = "omen_v1_thermal_params"
+                    elif profile == "omen_v1_legacy":
+                        params_struct = "omen_v1_legacy_thermal_params"
+                    elif profile == "omen_v1_no_ec":
+                        params_struct = "omen_v1_no_ec_thermal_params"
                            
                 start_idx = content.find(f"{target_array}[]")
                 if start_idx != -1:
@@ -407,10 +438,21 @@ class FanController:
                          segment = content[start_idx:end_idx]
                          if f'"{board_name}"' not in segment:
                              if target_array == "victus_s_thermal_profile_boards":
-                                 insertion = f'        {{\n            .matches = {{DMI_MATCH(DMI_BOARD_NAME, "{board_name}")}},\n            .driver_data = (void *)&victus_s_thermal_params,\n        }},\n'
+                                 # Find sentinel {} and insert BEFORE it
+                                 sentinel_idx = content.find("{},", start_idx)
+                                 if sentinel_idx == -1 or sentinel_idx > end_idx:
+                                      sentinel_idx = content.find("{}", start_idx)
+                                      
+                                 if sentinel_idx != -1 and sentinel_idx < end_idx:
+                                     insertion = f'        {{\n            .matches = {{DMI_MATCH(DMI_BOARD_NAME, "{board_name}")}},\n            .driver_data = (void *)&{params_struct},\n        }},\n'
+                                     content = content[:sentinel_idx] + insertion + content[sentinel_idx:]
+                                 else:
+                                     # Fallback to appending at end if no sentinel found
+                                     insertion = f'        {{\n            .matches = {{DMI_MATCH(DMI_BOARD_NAME, "{board_name}")}},\n            .driver_data = (void *)&{params_struct},\n        }},\n'
+                                     content = content[:end_idx] + insertion + content[end_idx:]
                              else:
                                  insertion = f'    "{board_name}",\n'
-                             content = content[:end_idx] + insertion + content[end_idx:]
+                                 content = content[:end_idx] + insertion + content[end_idx:]
                          else:
                              print(f"Board {board_name} already in {target_array} in orig file? Skipping append.")
                 else:
@@ -486,9 +528,14 @@ class FanController:
         subprocess.run(["modprobe", "-r", "hp-wmi"], check=False)
         
         try:
+            # Load dependencies that might be missing if hp-wmi was never loaded
+            deps = ["wmi", "rfkill", "hwmon", "platform_profile", "sparse_keymap", "acpi_ac"]
+            for dep in deps:
+                subprocess.run(["modprobe", dep], check=False, capture_output=True)
+            
             subprocess.run(["modprobe", "sparse_keymap"], check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
-            return False, f"Modprobe sparse_keymap failed: {e.stderr}"
+            return False, f"Loading dependencies failed: {e.stderr}"
         
         try:
             subprocess.run(["insmod", str(ko_files[0])], check=True, capture_output=True, text=True)
@@ -528,7 +575,7 @@ class FanController:
 
     def check_install_type(self):
         """Determines installation type: 'permanent', 'temporary', or None."""
-        if not (self.pwm1_path and self.pwm1_path.exists()):
+        if not (self.pwm1_enable_path and self.pwm1_enable_path.exists()):
             return None
         
         conf_type = self.config.get("install_type")
@@ -681,6 +728,22 @@ WantedBy=multi-user.target
             return True, "Service restarted."
         except Exception as e:
             return False, f"Failed to restart service: {e}"
+
+    def start_service(self):
+        """Starts the systemd service."""
+        try:
+            subprocess.run(["systemctl", "start", "omen-fan-control.service"], check=True)
+            return True, "Service started."
+        except Exception as e:
+            return False, f"Failed to start service: {e}"
+
+    def stop_service(self):
+        """Stops the systemd service."""
+        try:
+            subprocess.run(["systemctl", "stop", "omen-fan-control.service"], check=True)
+            return True, "Service stopped."
+        except Exception as e:
+            return False, f"Failed to stop service: {e}"
 
     def is_service_installed(self):
         """Checks if service file exists."""

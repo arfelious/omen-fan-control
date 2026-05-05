@@ -193,6 +193,7 @@ MODULE_ALIAS("wmi:5FB7F034-2C63-45E9-BE91-3D44E2C707E4");
 
 enum hp_ec_offsets {
   HP_EC_OFFSET_UNKNOWN = 0x00,
+  HP_NO_THERMAL_PROFILE_OFFSET = 0x01,
   HP_VICTUS_S_EC_THERMAL_PROFILE_OFFSET = 0x59,
   HP_OMEN_EC_THERMAL_PROFILE_FLAGS_OFFSET = 0x62,
   HP_OMEN_EC_THERMAL_PROFILE_TIMER_OFFSET = 0x63,
@@ -266,6 +267,20 @@ static const struct thermal_profile_params omen_v1_thermal_params = {
     .ec_tp_offset = HP_VICTUS_S_EC_THERMAL_PROFILE_OFFSET,
 };
 
+static const struct thermal_profile_params omen_v1_legacy_thermal_params = {
+    .performance = HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
+    .balanced = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+    .low_power = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+    .ec_tp_offset = HP_OMEN_EC_THERMAL_PROFILE_OFFSET,
+};
+
+static const struct thermal_profile_params omen_v1_no_ec_thermal_params = {
+    .performance = HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
+    .balanced = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+    .low_power = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+    .ec_tp_offset = HP_NO_THERMAL_PROFILE_OFFSET,
+};
+
 /*
  * A generic pointer for the currently-active board's thermal profile
  * parameters.
@@ -287,7 +302,8 @@ static const char *const omen_thermal_profile_boards[] = {
     "8748", "8749", "874A", "8786", "8787", "8788", "878A", "878B", "878C",
     "87B5", "886B", "886C", "88C8", "88CB", "88D1", "88D2", "88F4", "88F5",
     "88F6", "88F7", "88FD", "88FE", "88FF", "8900", "8901", "8902", "8912",
-    "8917", "8918", "8949", "894A", "89EB", "8A15", "8A42", "8BAD", "8E41",
+    "8917", "8918", "8949", "894A", "89EB", "8A15", "8A42", "8BAD", "8C58",
+    "8BA9", "8BCA", "8E41",
 };
 
 /* DMI Board names of Omen laptops that are specifically set to be thermal
@@ -317,6 +333,18 @@ static const char *const victus_thermal_profile_boards[] = {
 /* DMI Board names of Victus 16-r and Victus 16-s laptops */
 static const struct dmi_system_id
     victus_s_thermal_profile_boards[] __initconst = {
+  {
+    .matches = {DMI_MATCH(DMI_BOARD_NAME, "8A44")},
+    .driver_data = (void *)&omen_v1_legacy_thermal_params,
+  },
+  {
+    .matches = {DMI_MATCH(DMI_BOARD_NAME, "8A4D")},
+    .driver_data = (void *)&omen_v1_legacy_thermal_params,
+  },
+        {
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8BA9")},
+            .driver_data = (void *)&omen_v1_thermal_params,
+        },
         {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8BAB")},
             .driver_data = (void *)&omen_v1_thermal_params,
@@ -328,6 +356,10 @@ static const struct dmi_system_id
         {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8BBE")},
             .driver_data = (void *)&victus_s_thermal_params,
+        },
+        {
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8BCA")},
+            .driver_data = (void *)&omen_v1_thermal_params,
         },
         {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8BD4")},
@@ -342,12 +374,24 @@ static const struct dmi_system_id
             .driver_data = (void *)&omen_v1_thermal_params,
         },
         {
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8C76")},
+            .driver_data = (void *)&omen_v1_thermal_params,
+        },
+        {
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8C77")},
+            .driver_data = (void *)&omen_v1_thermal_params,
+        },
+        {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8C99")},
             .driver_data = (void *)&victus_s_thermal_params,
         },
         {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8C9C")},
             .driver_data = (void *)&victus_s_thermal_params,
+        },
+        {
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8D87")},
+            .driver_data = (void *)&omen_v1_no_ec_thermal_params,
         },
         {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8D41")},
@@ -514,20 +558,19 @@ static const struct key_entry hp_wmi_keymap[] = {
     {KE_KEY, 0x213b, {KEY_INFO}},
     {KE_KEY, 0x2169, {KEY_ROTATE_DISPLAY}},
     {KE_KEY, 0x216a, {KEY_SETUP}},
-    {
-        KE_IGNORE,
-        0x21a4,
-    }, /* Win Lock On */
-    {
-        KE_IGNORE,
-        0x121a4,
-    },                             /* Win Lock Off */
+    {KE_IGNORE, 0x21a4},          /* Win Lock On */
+    {KE_IGNORE, 0x121a4},         /* Win Lock Off */
     {KE_KEY, 0x21a5, {KEY_PROG2}}, /* HP Omen Key */
     {KE_KEY, 0x21a7, {KEY_FN_ESC}},
     {KE_KEY, 0x21a8, {KEY_PROG2}}, /* HP Envy x360 programmable key */
     {KE_KEY, 0x21a9, {KEY_TOUCHPAD_OFF}},
     {KE_KEY, 0x121a9, {KEY_TOUCHPAD_ON}},
     {KE_KEY, 0x231b, {KEY_HELP}},
+    {KE_IGNORE, 0x21ab},           /* FnLock on */
+    {KE_IGNORE, 0x121ab},          /* FnLock off */
+    {KE_IGNORE, 0x30021aa},        /* kbd backlight: level 2 -> off */
+    {KE_IGNORE, 0x33221aa},        /* kbd backlight: off -> level 1 */
+    {KE_IGNORE, 0x36421aa},        /* kbd backlight: level 1 -> level 2 */
     {KE_END, 0}};
 
 /*
@@ -1886,7 +1929,8 @@ platform_profile_victus_s_get_ec(enum platform_profile_option *profile) {
   const struct thermal_profile_params *params;
 
   params = active_thermal_profile_params;
-  if (params->ec_tp_offset == HP_EC_OFFSET_UNKNOWN) {
+  if (params->ec_tp_offset == HP_EC_OFFSET_UNKNOWN ||
+      params->ec_tp_offset == HP_NO_THERMAL_PROFILE_OFFSET) {
     *profile = active_platform_profile;
     return 0;
   }
@@ -2228,7 +2272,8 @@ static int thermal_profile_setup(struct platform_device *device) {
      * behaves like a wrapper around active_platform_profile, to avoid using
      * uninitialized data, we default to PLATFORM_PROFILE_BALANCED.
      */
-    if (active_thermal_profile_params->ec_tp_offset == HP_EC_OFFSET_UNKNOWN) {
+    if (active_thermal_profile_params->ec_tp_offset == HP_EC_OFFSET_UNKNOWN ||
+        active_thermal_profile_params->ec_tp_offset == HP_NO_THERMAL_PROFILE_OFFSET) {
       active_platform_profile = PLATFORM_PROFILE_BALANCED;
     } else {
       err = platform_profile_victus_s_get_ec(&active_platform_profile);
@@ -2430,8 +2475,6 @@ static umode_t hp_wmi_hwmon_is_visible(const void *data,
                                        int channel) {
   switch (type) {
   case hwmon_pwm:
-    if (attr == hwmon_pwm_input && !is_victus_s_thermal_profile())
-      return 0;
     return 0644;
   case hwmon_fan:
     if (is_victus_s_thermal_profile()) {
@@ -2467,13 +2510,15 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
     return 0;
   case hwmon_pwm:
     if (attr == hwmon_pwm_input) {
-      if (!is_victus_s_thermal_profile())
-        return -EOPNOTSUPP;
-
-      rpm = hp_wmi_get_fan_speed_victus_s(channel);
-      if (rpm < 0)
-        return rpm;
-      *val = rpm_to_pwm(rpm / 100, priv);
+      if (is_victus_s_thermal_profile()) {
+        rpm = hp_wmi_get_fan_speed_victus_s(channel);
+        if (rpm < 0)
+          return rpm;
+        *val = rpm_to_pwm(rpm, priv);
+      } else {
+        /* Fallback: return cached value for legacy OMENs */
+        *val = priv->pwm;
+      }
       return 0;
     }
     switch (priv->mode) {

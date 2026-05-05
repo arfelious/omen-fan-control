@@ -2439,8 +2439,6 @@ static int hp_wmi_apply_fan_settings(struct hp_wmi_hwmon_priv *priv) {
                           secs_to_jiffies(KEEP_ALIVE_DELAY_SECS));
     return 0;
   case PWM_MODE_MANUAL:
-    if (!is_victus_s_thermal_profile())
-      return -EOPNOTSUPP;
     ret = hp_wmi_fan_speed_set(priv, pwm_to_rpm(priv->pwm, priv));
     if (ret < 0)
       return ret;
@@ -2541,16 +2539,14 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
   switch (type) {
   case hwmon_pwm:
     if (attr == hwmon_pwm_input) {
-      if (!is_victus_s_thermal_profile())
-        return -EOPNOTSUPP;
-      /* PWM input is invalid when not in manual mode */
-      if (priv->mode != PWM_MODE_MANUAL)
-        return -EINVAL;
-
       /* ensure PWM input is within valid fan speeds */
-      rpm = pwm_to_rpm(val, priv);
-      rpm = clamp_val(rpm, priv->min_rpm, priv->max_rpm);
-      priv->pwm = rpm_to_pwm(rpm, priv);
+      if (is_victus_s_thermal_profile()) {
+        rpm = pwm_to_rpm(val, priv);
+        rpm = clamp_val(rpm, priv->min_rpm, priv->max_rpm);
+        priv->pwm = rpm_to_pwm(rpm, priv);
+      } else {
+        priv->pwm = clamp_val(val, 0, 255);
+      }
       return hp_wmi_apply_fan_settings(priv);
     }
     switch (val) {
@@ -2558,16 +2554,15 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
       priv->mode = PWM_MODE_MAX;
       return hp_wmi_apply_fan_settings(priv);
     case PWM_MODE_MANUAL:
-      if (!is_victus_s_thermal_profile())
-        return -EOPNOTSUPP;
       /*
        * When switching to manual mode, set fan speed to
        * current RPM values to ensure a smooth transition.
        */
-      rpm = hp_wmi_get_fan_speed_victus_s(channel);
-      if (rpm < 0)
-        return rpm;
-      priv->pwm = rpm_to_pwm(rpm / 100, priv);
+      if (is_victus_s_thermal_profile()) {
+        rpm = hp_wmi_get_fan_speed_victus_s(channel);
+        if (rpm >= 0)
+          priv->pwm = rpm_to_pwm(rpm / 100, priv);
+      }
       priv->mode = PWM_MODE_MANUAL;
       return hp_wmi_apply_fan_settings(priv);
     case PWM_MODE_AUTO:

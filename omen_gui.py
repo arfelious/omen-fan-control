@@ -831,12 +831,19 @@ class MainWindow(QMainWindow):
         exp_opt_layout.addWidget(QLabel("Force Thermal Profile:"))
         
         self.profile_combo = QComboBox()
-        self.profile_combo.addItems(["Omen", "Victus", "Victus S"])
+        self.profile_combo.addItems(["Omen", "Omen V1", "Omen V1 Legacy", "Omen V1 No EC", "Victus", "Victus S"])
         self.profile_combo.setItemDelegate(NoFocusDelegate())
         
         # Map config value to index
         current_profile = self.controller.config.get("thermal_profile", "omen")
-        index = {"omen": 0, "victus": 1, "victus_s": 2}.get(current_profile, 0)
+        index = {
+            "omen": 0, 
+            "omen_v1": 1, 
+            "omen_v1_legacy": 2, 
+            "omen_v1_no_ec": 3, 
+            "victus": 4, 
+            "victus_s": 5
+        }.get(current_profile, 0)
         self.profile_combo.setCurrentIndex(index)
         
         exp_opt_layout.addWidget(self.profile_combo)
@@ -1226,7 +1233,14 @@ class MainWindow(QMainWindow):
         # Experimental settings
         self.controller.config['enable_experimental'] = self.exp_check.isChecked()
         
-        profile_map = {0: "omen", 1: "victus", 2: "victus_s"}
+        profile_map = {
+            0: "omen", 
+            1: "omen_v1", 
+            2: "omen_v1_legacy", 
+            3: "omen_v1_no_ec", 
+            4: "victus", 
+            5: "victus_s"
+        }
         self.controller.config['thermal_profile'] = profile_map.get(self.profile_combo.currentIndex(), "omen")
 
         self.temp_history_len = self.ma_spin.value()

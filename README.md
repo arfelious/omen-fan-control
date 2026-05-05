@@ -18,7 +18,7 @@ This program also includes a modification that sets the max speed according to c
 ## Tested Hardware
 
 *   **Model:** HP OMEN MAX 16-AH0001NT (8D41)
-*   **OS:** Arch Linux 6.18.6
+*   **OS:** Arch Linux 6.18, 6.19, 7.0
 
 ## Installation
 
@@ -125,6 +125,17 @@ sudo python3 omen_cli.py fan-control --mode auto
 sudo python3 omen_cli.py fan-control --curve-csv my_curve.csv
 ```
 Where the csv file has values in `temp, percent` order
+
+**Temporary Settings (--no-save):**
+Use the `--no-save` flag to apply settings to the current session only. This prevents the utility from updating your persistent configuration file and is useful for one-off manual adjustments, hooks or scripts.
+
+> When using `--no-save` in **Manual** or **Auto** modes, the utility will automatically stop the background service to prevent it from overwriting your temporary setting. However, in **Curve** mode, the service is kept running as it is required to process the temperature data and apply the fan curve.
+
+```bash
+sudo python3 omen_cli.py fan-control --mode manual --value 100% --no-save
+```
+
+<br>
 
 <br>
 

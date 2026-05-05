@@ -287,7 +287,7 @@ static const char *const omen_thermal_profile_boards[] = {
     "8748", "8749", "874A", "8786", "8787", "8788", "878A", "878B", "878C",
     "87B5", "886B", "886C", "88C8", "88CB", "88D1", "88D2", "88F4", "88F5",
     "88F6", "88F7", "88FD", "88FE", "88FF", "8900", "8901", "8902", "8912",
-    "8917", "8918", "8949", "894A", "89EB", "8A15", "8A42", "8BAD", "8E41",
+    "8917", "8918", "8949", "894A", "89EB", "8A15", "8A42", "8BAD", "8BCA", "8E41",
 };
 
 /* DMI Board names of Omen laptops that are specifically set to be thermal
@@ -323,6 +323,10 @@ static const struct dmi_system_id
         },
         {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8BCD")},
+            .driver_data = (void *)&omen_v1_thermal_params,
+        },
+        {
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8BCA")},
             .driver_data = (void *)&omen_v1_thermal_params,
         },
         {

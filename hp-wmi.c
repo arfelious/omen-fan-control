@@ -378,6 +378,10 @@ static const struct dmi_system_id
             .driver_data = (void *)&omen_v1_thermal_params,
         },
         {
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8C4D")},
+            .driver_data = (void *)&omen_v1_thermal_params,
+        },
+        {
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8C99")},
             .driver_data = (void *)&victus_s_thermal_params,
         },

@@ -19,6 +19,8 @@ This program also includes a modification that sets the max speed according to c
 
 *   **Model:** HP OMEN MAX 16-AH0001NT (8D41)
 *   **OS:** Arch Linux 6.18, 6.19, 7.0
+*   **Model:** HP OMEN Transcend 16-u1xxx (8C4D)
+*   **OS:** Arch Linux 6.18 LTS, 7.0
 
 ## Installation
 

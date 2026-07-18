@@ -56,7 +56,7 @@ SUPPORTED_BOARDS = {
     
     "88F8", "8A25",
     "8BAB", "8BBE", "8BCA", "8BD4", "8BD5", "8C76", "8C77", "8C78", "8BCD",
-    "8C99", "8C9C", "8D41", "8D87", "8A44", "8A4D", "8C58", "8BA9"
+    "8C4D", "8C99", "8C9C", "8D41", "8D87", "8A44", "8A4D", "8C58", "8BA9"
 }
 
 POSSIBLY_SUPPPORTED_OMEN_BOARDS = {
@@ -69,7 +69,7 @@ POSSIBLY_SUPPPORTED_OMEN_BOARDS = {
     "8912", "8917", "8918", "8A97", "8A96", "8D2C", "8949", "8A98", "894A",
     "8B1D", "89EB", "8A4C", "8A4D", "8A4E", "8A40", "8A41", "8A42", "8A43",
     "8A44", "8BA8", "8BA9", "8BAA", "8BAC", "8C76", "8C77", "8C78",
-    "8BCA", "8BCB", "8BCF", "8C9B", "8BB3", "8BB4", "8C4D", "8C4E",
+    "8BCA", "8BCB", "8BCF", "8C9B", "8BB3", "8BB4", "8C4E",
     "8C58", "8C75", "8C74", "8C73", "8CC1", "8CC0", "8CF1", "8CF2", "8CF3",
     "8CF4", "8D2F"
 }

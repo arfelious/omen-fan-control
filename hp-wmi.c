@@ -626,7 +626,7 @@ enum pwm_modes {
 struct hp_wmi_hwmon_priv {
   u8 min_rpm;
   u8 max_rpm;
-  u8 gpu_delta;
+  int gpu_delta;
   u8 mode;
   u8 pwm;
   struct delayed_work keep_alive_dwork;
@@ -976,8 +976,10 @@ static int hp_wmi_fan_speed_set(struct hp_wmi_hwmon_priv *priv, u8 speed) {
     return ret;
   ret = hp_wmi_perform_query(HPWMI_VICTUS_S_FAN_SPEED_SET_QUERY, HPWMI_GM,
                              &fan_speed, sizeof(fan_speed), 0);
+  if (ret)
+    return ret < 0 ? ret : -EINVAL;
 
-  return ret;
+  return 0;
 }
 
 static int hp_wmi_fan_speed_reset(struct hp_wmi_hwmon_priv *priv) {
@@ -2512,7 +2514,7 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
         rpm = hp_wmi_get_fan_speed_victus_s(channel);
         if (rpm < 0)
           return rpm;
-        *val = rpm_to_pwm(rpm, priv);
+        *val = rpm_to_pwm(rpm / 100, priv);
       } else {
         /* Fallback: return cached value for legacy OMENs */
         *val = priv->pwm;
@@ -2611,7 +2613,8 @@ static void hp_wmi_hwmon_keep_alive_handler(struct work_struct *work) {
 static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv) {
   u8 fan_data[128] = {0};
   struct victus_s_fan_table *fan_table;
-  u8 min_rpm, max_rpm, gpu_delta;
+  u8 min_rpm, max_rpm;
+  int gpu_delta;
   int ret;
   int max_val = 0;
 
@@ -2649,8 +2652,17 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv) {
   }
 
   min_rpm = fan_table->entries[0].cpu_rpm;
-  max_rpm = fan_table->entries[fan_table->header.num_entries - 1].cpu_rpm;
+  /*
+   * The table can be zero-padded (e.g. 8D26 declares 12 entries but
+   * ships 11) - take the max over real entries, not the last slot.
+   */
+  max_rpm = 0;
+  for (int i = 0; i < fan_table->header.num_entries; i++)
+    if (fan_table->entries[i].cpu_rpm > max_rpm)
+      max_rpm = fan_table->entries[i].cpu_rpm;
   gpu_delta = fan_table->entries[0].gpu_rpm - fan_table->entries[0].cpu_rpm;
+  if (min_rpm == 0 || max_rpm == 0)
+    return 0; /* garbage table - keep defaults */
   priv->min_rpm = min_rpm;
   priv->max_rpm = max_rpm;
   priv->gpu_delta = gpu_delta;

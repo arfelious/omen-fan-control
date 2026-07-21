@@ -397,6 +397,11 @@ static const struct dmi_system_id
             .matches = {DMI_MATCH(DMI_BOARD_NAME, "8D41")},
             .driver_data = (void *)&victus_s_thermal_params,
         },
+        {
+            /* OMEN 16-ap0xxx: V1 profile values, legacy EC readback */
+            .matches = {DMI_MATCH(DMI_BOARD_NAME, "8D26")},
+            .driver_data = (void *)&omen_v1_legacy_thermal_params,
+        },
         {},
 };
 
@@ -2500,10 +2505,15 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
   priv = dev_get_drvdata(dev);
   switch (type) {
   case hwmon_fan:
-    if (is_victus_s_thermal_profile())
+    if (is_victus_s_thermal_profile()) {
       ret = hp_wmi_get_fan_speed_victus_s(channel);
-    else
+      /* Boards like 8D26 answer the victus_s query with zeros while
+         the legacy query reports true tach values - fall back. */
+      if (ret == 0)
+        ret = hp_wmi_get_fan_speed(channel);
+    } else {
       ret = hp_wmi_get_fan_speed(channel);
+    }
     if (ret < 0)
       return ret;
     *val = ret;
@@ -2512,6 +2522,8 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
     if (attr == hwmon_pwm_input) {
       if (is_victus_s_thermal_profile()) {
         rpm = hp_wmi_get_fan_speed_victus_s(channel);
+        if (rpm == 0)
+          rpm = hp_wmi_get_fan_speed(channel);
         if (rpm < 0)
           return rpm;
         *val = rpm_to_pwm(rpm / 100, priv);
@@ -2566,6 +2578,8 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
        */
       if (is_victus_s_thermal_profile()) {
         rpm = hp_wmi_get_fan_speed_victus_s(channel);
+        if (rpm == 0)
+          rpm = hp_wmi_get_fan_speed(channel);
         if (rpm >= 0)
           priv->pwm = rpm_to_pwm(rpm / 100, priv);
       }

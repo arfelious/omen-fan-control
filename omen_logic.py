@@ -85,6 +85,10 @@ POSSIBLY_SUPPPORTED_OMEN_BOARDS = {
     "8CF4", "8D2F"
 }
 
+# Legacy OMEN 15 (2018-2019): WMI pwm1_enable max fails; EC 0xEC boost works.
+EC_FAN_BOOST_BOARDS = {"84DA", "84DB", "84DC"}
+EC_FAN_BOOST_OFFSET = 0xEC
+
 class FanController:
     def __init__(self, config_path=None):
         self._find_paths()
@@ -246,6 +250,27 @@ class FanController:
                 os.fsync(f.fileno())
             except:
                 pass
+
+    def uses_ec_fan_boost(self):
+        status, board = self.check_board_support()
+        return board in EC_FAN_BOOST_BOARDS
+
+    def _ec_fan_boost_set(self, enabled):
+        try:
+            subprocess.run(["modprobe", "ec_sys", "write_support=1"], check=True,
+                           capture_output=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to load ec_sys: {e}")
+            return False
+        ecio = "/sys/kernel/debug/ec/ec0/io"
+        try:
+            with open(ecio, "r+b") as ec:
+                ec.seek(EC_FAN_BOOST_OFFSET)
+                ec.write(bytes([1 if enabled else 0]))
+            return True
+        except Exception as e:
+            print(f"Error writing EC fan boost: {e}")
+            return False
 
     def write_sys_file(self, path, value):
         """Helper to write to sysfs files."""
@@ -414,6 +439,12 @@ class FanController:
 
     def set_fan_mode(self, mode):
         """Sets fan mode: 'max', 'auto', or 'manual'."""
+        if self.uses_ec_fan_boost():
+            if mode == 'max':
+                self._ec_fan_boost_set(True)
+            elif mode == 'auto':
+                self._ec_fan_boost_set(False)
+            return
         if mode == 'max':
             self.write_sys_file(self.pwm1_enable_path, 0)
         elif mode == 'auto':

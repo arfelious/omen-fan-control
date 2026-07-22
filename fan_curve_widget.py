@@ -126,15 +126,75 @@ class FanCurveEditor(QWidget):
         w = self.width() - 2 * self.margin
         h = self.height() - 2 * self.margin
         pos = event.position()
+        btn = event.button()
         
-        for i, p in enumerate(self.points):
-            sx = self.margin + (p.x() / self.max_temp * w)
-            sy = self.margin + h - (p.y() / 100 * h)
-            dist = ((pos.x() - sx)**2 + (pos.y() - sy)**2)**0.5
-            if dist < 15:
-                self.dragging_index = i
-                self.update()
-                return
+        # Middle Click -> Remove Point
+        if btn == Qt.MouseButton.MiddleButton:
+            if len(self.points) <= 2:
+                return  # Keep at least 2 points for a valid curve
+            for i, p in enumerate(self.points):
+                sx = self.margin + (p.x() / self.max_temp * w)
+                sy = self.margin + h - (p.y() / 100 * h)
+                dist = ((pos.x() - sx)**2 + (pos.y() - sy)**2)**0.5
+                if dist < 15:
+                    self.points.pop(i)
+                    if self.points:
+                        last = self.points[-1]
+                        if last.x() != self.max_temp:
+                            self.points[-1] = QPointF(self.max_temp, last.y())
+                    self.curveChanged.emit([(p.x(), p.y()) for p in self.points])
+                    self.update()
+                    return
+            return
+
+        # Right Click -> Add Point
+        if btn == Qt.MouseButton.RightButton:
+            new_x = max(0, min(self.max_temp, (pos.x() - self.margin) / w * self.max_temp))
+            raw_y = max(0, min(100, (self.margin + h - pos.y()) / h * 100))
+            
+            # Ignore if right-clicking directly on top of existing point
+            for p in self.points:
+                sx = self.margin + (p.x() / self.max_temp * w)
+                sy = self.margin + h - (p.y() / 100 * h)
+                dist = ((pos.x() - sx)**2 + (pos.y() - sy)**2)**0.5
+                if dist < 12:
+                    return
+
+            # Determine bounds (prev_y and next_y) for monotonic order
+            temp_points = sorted(self.points, key=lambda p: p.x())
+            prev_y = 0.0
+            next_y = 100.0
+            for p in temp_points:
+                if p.x() <= new_x:
+                    prev_y = p.y()
+                if p.x() >= new_x:
+                    next_y = p.y()
+                    break
+
+            clamped_y = min(next_y, max(prev_y, raw_y))
+
+            self.points.append(QPointF(new_x, clamped_y))
+            self.points.sort(key=lambda p: p.x())
+            
+            if self.points:
+                last = self.points[-1]
+                if last.x() != self.max_temp:
+                    self.points[-1] = QPointF(self.max_temp, last.y())
+                    
+            self.curveChanged.emit([(p.x(), p.y()) for p in self.points])
+            self.update()
+            return
+
+        # Left Click -> Drag Point
+        if btn == Qt.MouseButton.LeftButton:
+            for i, p in enumerate(self.points):
+                sx = self.margin + (p.x() / self.max_temp * w)
+                sy = self.margin + h - (p.y() / 100 * h)
+                dist = ((pos.x() - sx)**2 + (pos.y() - sy)**2)**0.5
+                if dist < 15:
+                    self.dragging_index = i
+                    self.update()
+                    return
 
     def mouseMoveEvent(self, event):
         w = self.width() - 2 * self.margin
@@ -191,12 +251,15 @@ class FanCurveEditor(QWidget):
         return [(p.x(), p.y()) for p in self.points]
 
     def set_points(self, points):
+        if not points:
+            points = [(40, 20), (55, 40), (70, 65), (85, 90), (95, 100)]
         self.points = [QPointF(x, y) for x, y in points]
         if self.points:
              last = self.points[-1]
              if last.x() != self.max_temp:
                  self.points[-1] = QPointF(self.max_temp, last.y())
         self.update()
+        self.curveChanged.emit([(p.x(), p.y()) for p in self.points])
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

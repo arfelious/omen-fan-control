@@ -18,6 +18,8 @@
 
 import click
 import sys
+import time
+import threading
 from omen_logic import FanController, OMEN_FAN_DIR
 
 @click.group()
@@ -46,12 +48,12 @@ def cli(ctx, config, help_extra):
         click.echo("", err=True)
 
     # Board support check
-    if not controller.config.get("bypass_warning", False):
+    if not controller.config.get("bypass_patch_warning", False):
         status, board = controller.check_board_support()
         if status == "UNSUPPORTED":
              click.echo(click.style(f"WARNING: Your board '{board}' is not in the known compatible list.", fg="red"))
              click.echo(click.style("Using this tool could potentially cause system instability.", fg="red"))
-             click.echo("To bypass this warning, set 'bypass_warning' to true in config or toggle in GUI.")
+             click.echo("To bypass this warning, set 'bypass_patch_warning' to true in config or toggle in GUI.")
 
              
         elif status == "POSSIBLY_SUPPORTED" and not controller.config.get("enable_experimental", False):
@@ -171,8 +173,9 @@ def install_patch(install_type, temp, perm, restore):
 @click.option('--value', required=False, help="Manual value: 0-255 (PWM) or 0-100% (e.g. '50%')")
 @click.option('--curve-csv', required=False, type=click.Path(exists=True), help="CSV file for curve mode (format: temp,percent)")
 @click.option('--no-save', is_flag=True, help="Apply changes temporarily without saving to config.")
+@click.option('--source', hidden=True, help="Internal use: Identify the source of the config change.")
 @click.argument('action', required=False)
-def fan_control(mode, value, curve_csv, no_save, action):
+def fan_control(mode, value, curve_csv, no_save, action, source):
     """
     Control fan mode and speed.
     Usage:
@@ -218,12 +221,12 @@ def fan_control(mode, value, curve_csv, no_save, action):
     if mode == 'auto':
         controller.set_fan_mode('auto')
         controller.config["mode"] = "auto"
-        controller.save_config(volatile=no_save)
+        controller.save_config(volatile=no_save, source=source)
         click.echo("Fan set to AUTO.")
     elif mode == 'max':
         controller.set_fan_mode('max')
         controller.config["mode"] = "max"
-        controller.save_config(volatile=no_save)
+        controller.save_config(volatile=no_save, source=source)
         click.echo("Fan set to MAX.")
     elif mode == 'manual':
         # Check driver requirement
@@ -256,7 +259,7 @@ def fan_control(mode, value, curve_csv, no_save, action):
             
             controller.config["mode"] = "manual"
             controller.config["manual_pwm"] = pwm_val
-            controller.save_config(volatile=no_save)
+            controller.save_config(volatile=no_save, source=source)
             controller.set_fan_pwm(pwm_val)
             
         except ValueError:
@@ -303,7 +306,7 @@ def fan_control(mode, value, curve_csv, no_save, action):
                 return
 
         controller.config["mode"] = "curve"
-        controller.save_config(volatile=no_save)
+        controller.save_config(volatile=no_save, source=source)
         click.echo("Curve mode enabled in config.")
         
         if not controller.is_service_installed() and not no_save:
@@ -317,6 +320,10 @@ def fan_control(mode, value, curve_csv, no_save, action):
              else:
                  click.echo("Service should pick up the change automatically.")
 
+    if not no_save and controller.is_service_installed() and not controller.is_service_running():
+        click.echo("Restarting background service to resume automatic control...")
+        controller.start_service()
+
 @cli.command()
 def serve():
     """Run the fan control daemon (foreground). Used by systemd service."""
@@ -324,6 +331,14 @@ def serve():
     from omen_logic import FanController, OMEN_FAN_DIR, VOLATILE_CONFIG_FILE
     controller = get_controller()
     click.echo("Starting Omen Fan Control Daemon...")
+    
+    # Check if we started up with fans in reverse mode (e.g. after a crash or manual run)
+    try:
+        if controller.is_reverse_mode_active():
+            click.echo("Recovery: Reverse mode detected on daemon startup. Initiating stop sequence...")
+            controller.stop_fan_cleaning()
+    except Exception as e:
+        click.echo(f"Startup reverse mode check failed: {e}")
     
     ma_window = controller.config.get("ma_window", 5)
     temp_history = []
@@ -345,9 +360,11 @@ def serve():
                     current_v_mtime = VOLATILE_CONFIG_FILE.stat().st_mtime
                 
                 if current_mtime > last_config_mtime or current_v_mtime > last_volatile_mtime:
+                    # Fresh reload from disk
                     controller.config = controller.load_config()
-                    last_config_mtime = current_mtime
-                    last_volatile_mtime = current_v_mtime
+                    last_config_mtime = controller.config_path.stat().st_mtime if controller.config_path.exists() else 0
+                    last_volatile_mtime = VOLATILE_CONFIG_FILE.stat().st_mtime if VOLATILE_CONFIG_FILE.exists() else 0
+                    print("Configuration reloaded from disk.")
             except Exception:
                 # If file doesn't exist or error, ignore
                 pass
@@ -361,7 +378,43 @@ def serve():
             if time.time() - last_watchdog_time > watchdog_interval:
                 last_watchdog_time = time.time()
                 
-            current_temp = controller.get_cpu_temp()
+            current_temp = controller.get_reference_temp()
+            
+            # Fan Cleaner Daemon Logic
+            cleaner_active = controller.config.get("cleaner_in_progress", False) or controller.config.get("cleaner_transitioning", False)
+            if cleaner_active:
+                cleaner_in_progress = controller.config.get("cleaner_in_progress", False)
+                if cleaner_in_progress:
+                    if current_temp is not None and current_temp > 70:
+                        click.echo(f"WARNING: CPU Temp reached {current_temp}°C (> 70°C) during fan cleaning. Aborting immediately!")
+                        controller.stop_fan_cleaning()
+                    else:
+                        start_time = controller.config.get("cleaner_start_time", 0)
+                        if time.time() - start_time >= 30:
+                            click.echo("Fan cleaning cycle completed normally.")
+                            controller.stop_fan_cleaning()
+                time.sleep(1)
+                continue
+
+            cleaner_enabled = controller.config.get("cleaner_enabled", False)
+            if cleaner_enabled:
+                raw_interval = controller.config.get("cleaner_interval", 14400)
+                interval = max(raw_interval, 300) # Enforce 5-minute (300s) minimum limit
+                last_run = controller.config.get("cleaner_last_run", 0)
+                if time.time() - last_run >= interval:
+                    if current_temp is not None and current_temp <= 70:
+                        click.echo(f"Triggering automatic fan cleaning cycle (interval: {interval}s)...")
+                        success, msg = controller.start_fan_cleaning()
+                        if success:
+                            controller.config["cleaner_last_run"] = time.time()
+                            controller.save_config()
+                            def _auto_stop_cleaner():
+                                time.sleep(30)
+                                if controller.config.get("cleaner_in_progress", False):
+                                    controller.stop_fan_cleaning()
+                            threading.Thread(target=_auto_stop_cleaner, daemon=True).start()
+                        else:
+                            click.echo(f"Failed to start automatic fan cleaning: {msg}")
             
             ma_window = controller.config.get("ma_window", 5)
             temp_history.append(current_temp)
@@ -480,7 +533,7 @@ def stress(duration):
 @click.option('--curve-interpolation', type=click.Choice(['smooth', 'discrete']), required=False, is_flag=False, flag_value='show', help="Curve interpolation mode. No arg shows current.")
 @click.option('--enable-experimental', type=click.Choice(['on', 'off']), required=False, is_flag=False, flag_value='show', help="Enable experimental board support. No arg shows current.")
 @click.option('--thermal-profile', type=click.Choice(['omen', 'victus', 'victus_s']), required=False, is_flag=False, flag_value='show', help="Set thermal profile for exp. support. No arg shows current.")
-def options(wait_time, watchdog, ma_window, bypass_warning, curve_interpolation, enable_experimental, thermal_profile):
+def options(wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpolation, enable_experimental, thermal_profile):
     """
     Configure or view options.
     Run without arguments to view all current settings.
@@ -489,7 +542,7 @@ def options(wait_time, watchdog, ma_window, bypass_warning, curve_interpolation,
     """
     controller = get_controller()
     
-    if all(x is None for x in [wait_time, watchdog, ma_window, bypass_warning, curve_interpolation]):
+    if all(x is None for x in [wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpolation]):
         wt = controller.config.get('calibration_wait', 5)
         wd = controller.config.get('watchdog_interval', 90)
         mw = controller.config.get('ma_window', 5)
@@ -543,12 +596,12 @@ def options(wait_time, watchdog, ma_window, bypass_warning, curve_interpolation,
         else:
             click.echo("Error: MA Window must be positive.")
     
-    if bypass_warning is not None:
-        if bypass_warning == 'show':
+    if bypass_patch_warning is not None:
+        if bypass_patch_warning == 'show':
             val = controller.config.get('bypass_patch_warning', False)
             click.echo(f"Current Bypass Warning: {'On' if val else 'Off'}")
         else:
-            is_on = (bypass_warning == 'on')
+            is_on = (bypass_patch_warning == 'on')
             controller.config['bypass_patch_warning'] = is_on
             changed = True
             click.echo(f"Bypass Warning set to {'On' if is_on else 'Off'}")
@@ -583,6 +636,104 @@ def options(wait_time, watchdog, ma_window, bypass_warning, curve_interpolation,
         
     if changed:
         controller.save_config()
+
+@cli.group()
+def cleaner():
+    """Manage Fan Cleaner (Reverse fans for dust removal)"""
+    pass
+
+@cleaner.command("start")
+@click.option('--background', '-b', is_flag=True, help="Run cleaning cycle in background without waiting")
+def cleaner_start(background):
+    """Start manual fan cleaning cycle immediately"""
+    controller = get_controller()
+    if not controller.check_fan_cleaner_capability():
+        click.echo("Error: Fan cleaning hardware support not detected on this system (/proc/acpi/call required).")
+        return
+    click.echo("Initiating fan cleaning cycle...")
+    success, msg = controller.start_fan_cleaning()
+    if not success:
+        click.echo(f"Error starting fan cleaning: {msg}")
+        return
+
+    click.echo("Fan cleaning started successfully!")
+
+    if background:
+        click.echo("Running in background. Use 'omen_cli.py cleaner status' to monitor progress.")
+        return
+
+    dur = controller.config.get("cleaner_duration", 30)
+    click.echo(f"Cleaning in progress ({dur}s)... Press Ctrl+C to stop early.")
+    try:
+        start_time = time.time()
+        while time.time() - start_time < dur:
+            if not controller.config.get("cleaner_in_progress", False):
+                break
+            rem = max(0, int(dur - (time.time() - start_time)))
+            print(f"Time remaining: {rem}s   ", end='\r')
+            time.sleep(1)
+        click.echo("\nFan cleaning cycle completed.")
+    except KeyboardInterrupt:
+        click.echo("\nStopping fan cleaning cycle...")
+    finally:
+        controller.stop_fan_cleaning()
+
+@cleaner.command("stop")
+def cleaner_stop():
+    """Stop fan cleaning immediately and restore forward mode"""
+    controller = get_controller()
+    click.echo("Stopping fan cleaning and restoring forward mode...")
+    controller.emergency_stop_fan_cleaning()
+    click.echo("Fan cleaning stopped.")
+
+@cleaner.command("enable")
+def cleaner_enable():
+    """Enable automatic periodic fan cleaning"""
+    controller = get_controller()
+    controller.config["cleaner_enabled"] = True
+    controller.save_config()
+    click.echo("Automatic fan cleaner enabled.")
+
+@cleaner.command("disable")
+def cleaner_disable():
+    """Disable automatic periodic fan cleaning"""
+    controller = get_controller()
+    controller.config["cleaner_enabled"] = False
+    controller.save_config()
+    click.echo("Automatic fan cleaner disabled.")
+
+@cleaner.command("status")
+def cleaner_status():
+    """Show current fan cleaning status and configuration"""
+    controller = get_controller()
+    supported = controller.check_fan_cleaner_capability()
+    enabled = controller.config.get("cleaner_enabled", False)
+    in_progress = controller.config.get("cleaner_in_progress", False)
+    interval = controller.config.get("cleaner_interval", 14400)
+    duration = controller.config.get("cleaner_duration", 30)
+    last_run = controller.config.get("cleaner_last_run", 0)
+
+    click.echo(f"Hardware Support:   {'Yes' if supported else 'No'}")
+    click.echo(f"Automatic Cleaner:  {'Enabled' if enabled else 'Disabled'}")
+    click.echo(f"Cleaner Status:     {'Active (Reverse)' if in_progress else 'Idle (Forward)'}")
+    click.echo(f"Cleaning Interval:  {interval/3600:.1f} hours ({interval}s)")
+    click.echo(f"Cleaning Duration:  {duration} seconds")
+    if last_run > 0:
+        elapsed_min = int((time.time() - last_run) / 60)
+        click.echo(f"Last Cleaning Run:  {elapsed_min} minutes ago")
+    else:
+        click.echo("Last Cleaning Run:  Never")
+
+@cleaner.command("logs")
+@click.option('--lines', default=20, help="Number of recent log lines to display")
+def cleaner_logs(lines):
+    """Show recent fan cleaner diagnostic logs"""
+    controller = get_controller()
+    logs = controller.get_cleaner_logs(max_lines=lines)
+    if logs:
+        click.echo(logs)
+    else:
+        click.echo("No cleaner logs found.")
 
 @cli.group()
 def service():
@@ -629,6 +780,20 @@ def stop_service_cmd():
     success, msg = controller.stop_service()
     click.echo(msg)
     
+@service.command(name="enable-shutdown-hook")
+def enable_shutdown_hook_cmd():
+    """Enable fan cleanup on shutdown (sets fans to 30%)"""
+    controller = get_controller()
+    success, msg = controller.create_shutdown_service()
+    click.echo(msg)
+
+@service.command(name="disable-shutdown-hook")
+def disable_shutdown_hook_cmd():
+    """Disable fan cleanup on shutdown"""
+    controller = get_controller()
+    success, msg = controller.remove_shutdown_service()
+    click.echo(msg)
+    
 @service.command(name="status")
 def service_status_cmd():
     """Check service status"""
@@ -650,6 +815,11 @@ def status():
     if not controller.is_service_installed():
         status_str = click.style("NOT INSTALLED", fg="yellow")
     click.echo(f"Service Status:    {status_str}")
+    
+    # Shutdown Hook
+    is_hook_enabled = controller.is_shutdown_service_enabled()
+    hook_str = click.style("ENABLED", fg="green") if is_hook_enabled else click.style("DISABLED", fg="red")
+    click.echo(f"Shutdown Hook:     {hook_str}")
     
     # Installation Type
     install_type = controller.check_install_type()
@@ -725,9 +895,9 @@ def enable_bios():
 @click.option('--bypass-warning', type=click.Choice(['on', 'off']), required=False, is_flag=False, flag_value='show', help="Bypass driver patch warning. No arg shows current.")
 @click.option('--curve-interpolation', type=click.Choice(['smooth', 'discrete']), required=False, is_flag=False, flag_value='show', help="Curve interpolation mode. No arg shows current.")
 @click.pass_context
-def settings(ctx, wait_time, watchdog, ma_window, bypass_warning, curve_interpolation):
+def settings(ctx, wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpolation):
     """Alias for options"""
-    ctx.invoke(options, wait_time=wait_time, watchdog=watchdog, ma_window=ma_window, bypass_warning=bypass_warning, curve_interpolation=curve_interpolation)
+    ctx.invoke(options, wait_time=wait_time, watchdog=watchdog, ma_window=ma_window, bypass_patch_warning=bypass_patch_warning, curve_interpolation=curve_interpolation)
 
 @cli.command()
 def license():

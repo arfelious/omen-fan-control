@@ -6,7 +6,8 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QPushButton, QLabel, QFrame, QStackedWidget,
                             QComboBox, QSpinBox, QMessageBox, QTabWidget, QFileDialog,
-                            QProgressBar, QScrollArea, QSizePolicy, QListView, QTextEdit, QStyle, QStyledItemDelegate, QCheckBox)
+                            QProgressBar, QScrollArea, QSizePolicy, QListView, QTextEdit, QStyle, 
+                            QStyledItemDelegate, QCheckBox, QGraphicsDropShadowEffect, QLineEdit)
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QPoint
 from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QPainter, QBrush, QPen
 from omen_logic import FanController, OMEN_FAN_DIR
@@ -86,14 +87,27 @@ class CoreTempDialog(QDialog):
         # Top Package Section
         self.pkg_widget = QWidget()
         pkg_layout = QHBoxLayout(self.pkg_widget)
-        self.lbl_pkg_name = QLabel("Package 0")
-        self.lbl_pkg_name.setProperty("class", "pkg")
-        self.lbl_pkg_val = QLabel("--°C")
-        self.lbl_pkg_val.setProperty("class", "pkg_val")
+        pkg_layout.setContentsMargins(20, 10, 20, 10)
+        
+        # CPU Side
+        self.lbl_cpu_name = QLabel("CPU Package 0")
+        self.lbl_cpu_name.setProperty("class", "pkg")
+        self.lbl_cpu_val = QLabel("--°C")
+        self.lbl_cpu_val.setProperty("class", "pkg_val")
+        
+        # GPU Side
+        self.lbl_gpu_name = QLabel("GPU")
+        self.lbl_gpu_name.setProperty("class", "pkg")
+        self.lbl_gpu_val = QLabel("--°C")
+        self.lbl_gpu_val.setProperty("class", "pkg_val")
+        
+        pkg_layout.addWidget(self.lbl_cpu_name)
+        pkg_layout.addWidget(self.lbl_cpu_val)
+        pkg_layout.addSpacing(40)
+        pkg_layout.addWidget(self.lbl_gpu_name)
+        pkg_layout.addWidget(self.lbl_gpu_val)
         pkg_layout.addStretch()
-        pkg_layout.addWidget(self.lbl_pkg_name)
-        pkg_layout.addWidget(self.lbl_pkg_val)
-        pkg_layout.addStretch()
+        
         self.layout_main.addWidget(self.pkg_widget)
         
         self.grid_widget = QWidget()
@@ -132,11 +146,21 @@ class CoreTempDialog(QDialog):
                 clean_temps.append((clean_label, temp))
         
         if package_found:
-            self.lbl_pkg_name.setText(package_found[0])
-            self.lbl_pkg_val.setText(f"{package_found[1]}°C")
+            self.lbl_cpu_name.setText("CPU Package 0")
+            self.lbl_cpu_val.setText(f"{package_found[1]}°C")
         else:
-            self.lbl_pkg_name.setText("Package")
-            self.lbl_pkg_val.setText("--")
+            self.lbl_cpu_name.setText("CPU")
+            self.lbl_cpu_val.setText("--°C")
+            
+        gpu_temp = self.controller.get_gpu_temp()
+        if gpu_temp > 0:
+            self.lbl_gpu_name.setText("GPU Temperature")
+            self.lbl_gpu_val.setText(f"{gpu_temp}°C")
+            self.lbl_gpu_name.setVisible(True)
+            self.lbl_gpu_val.setVisible(True)
+        else:
+            self.lbl_gpu_name.setVisible(False)
+            self.lbl_gpu_val.setVisible(False)
         
         if not self.temp_labels or len(self.temp_labels) != len(clean_temps):
              self.build_grid(clean_temps)
@@ -232,9 +256,34 @@ class MainWindow(QMainWindow):
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         nav_layout.addWidget(self.title_label, 1)
         
+        self.sensor_pill = QFrame()
+        self.sensor_pill.setObjectName("SensorPill")
+        self.sensor_pill.setFixedSize(84, 24)
+        pill_layout = QHBoxLayout(self.sensor_pill)
+        pill_layout.setContentsMargins(2, 2, 2, 2)
+        pill_layout.setSpacing(0)
+        pill_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.cpu_pill_btn = QPushButton("CPU")
+        self.cpu_pill_btn.setFixedSize(40, 20)
+        self.cpu_pill_btn.clicked.connect(lambda: self.set_reference_sensor("cpu"))
+        
+        self.gpu_pill_btn = QPushButton("GPU")
+        self.gpu_pill_btn.setFixedSize(40, 20)
+        self.gpu_pill_btn.clicked.connect(lambda: self.set_reference_sensor("gpu"))
+        
+        pill_layout.addWidget(self.cpu_pill_btn)
+        pill_layout.addWidget(self.gpu_pill_btn)
+        nav_layout.addWidget(self.sensor_pill, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        # Hide GPU side if not present
+        if not self.controller.has_gpu():
+            self.gpu_pill_btn.setVisible(False)
+            self.sensor_pill.setFixedSize(44, 24) # Shrink pill
+
         self.temp_label = QLabel("0°C")
         self.temp_label.setObjectName("HeaderTemp")
-        self.temp_label.setFixedWidth(100)
+        self.temp_label.setFixedWidth(70)
         self.temp_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.temp_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self.temp_label.mousePressEvent = self.show_core_temps
@@ -252,6 +301,10 @@ class MainWindow(QMainWindow):
         self.init_options_page()
         self.init_about_page()
         
+        # Initialize cleaner page if system/board supports Fan Cleaner
+        if self.controller.check_fan_cleaner_capability():
+            self.init_cleaner_page()
+        
         self.apply_dark_theme()
         
         self.status_label = QLabel("Checking...")
@@ -267,13 +320,15 @@ class MainWindow(QMainWindow):
         
         self.svc_timer = QTimer()
         self.svc_timer.timeout.connect(self.check_service_status)
-        self.svc_timer.start(15000)
+        self.svc_timer.start(5000)
         self.check_service_status()
         
         self.rpm_timer = QTimer()
         self.rpm_timer.timeout.connect(self.update_status)
         self.rpm_timer.start(2000)
+        self.update_status()
 
+        self.update_cursors()
         self.center_window()
 
         self.center_window()
@@ -296,7 +351,7 @@ class MainWindow(QMainWindow):
                 self.controller.config["bypass_root_warning"] = True
                 self.controller.save_config()
 
-        if not self.controller.config.get("bypass_warning", False) or self.controller.config.get("debug_experimental_ui", False):
+        if not self.controller.config.get("bypass_patch_warning", False) or self.controller.config.get("debug_experimental_ui", False):
             support_status, board_name = self.controller.check_board_support()
             
             if support_status == "UNSUPPORTED" and not self.controller.config.get("debug_experimental_ui", False):
@@ -315,7 +370,7 @@ class MainWindow(QMainWindow):
                 
                 if ret == QMessageBox.StandardButton.Yes:
                     if chk.isChecked():
-                        self.controller.config["bypass_warning"] = True
+                        self.controller.config["bypass_patch_warning"] = True
                         self.controller.save_config()
                 else:
                     sys.exit(0)
@@ -343,6 +398,8 @@ class MainWindow(QMainWindow):
                 if msg.clickedButton() == enable_btn:
                     self.controller.config["enable_experimental"] = True
                     self.controller.config["thermal_profile"] = "omen"
+                    if chk.isChecked():
+                        self.controller.config["bypass_patch_warning"] = True
                     self.controller.save_config()
                     QMessageBox.information(self, "Enabled", "Experimental support enabled.\nPlease go to 'Driver Management' to install/update the driver patch.")
                     
@@ -352,11 +409,24 @@ class MainWindow(QMainWindow):
                          self.toggle_experimental_options(True)
                 
                 if chk.isChecked():
-                    self.controller.config["bypass_warning"] = True
+                    self.controller.config["bypass_patch_warning"] = True
                     self.controller.save_config()
                     
                 if self.controller.config.get("debug_experimental_ui"):
                      print("Debug experimental UI shown.")
+
+    def update_cursors(self):
+        """Sets pointing hand cursor for non-destructive interactive elements."""
+        for widget in self.findChildren((QPushButton, QComboBox, QCheckBox, QSpinBox)):
+            is_destructive = False
+            if isinstance(widget, QPushButton):
+                text = widget.text().lower()
+                # Define destructive keywords
+                if any(x in text for x in ["remove service", "uninstall", "restore original", "disable bios"]):
+                    is_destructive = True
+            
+            if not is_destructive:
+                widget.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def center_window(self):
         qr = self.frameGeometry()
@@ -374,6 +444,32 @@ class MainWindow(QMainWindow):
         #HeaderRPM { font-size: 16px; color: #aaa; font-weight: bold; padding-left: 10px; }
         #HeaderTemp { font-size: 16px; color: #d63333; font-weight: bold; padding-right: 10px; }
         #HeaderTemp:hover { color: #ff6666; }
+        
+        #SensorPill { 
+            background-color: #252526; 
+            border-radius: 12px; 
+            border: 1px solid #444; 
+            margin-right: 10px;
+            max-height: 24px;
+            min-height: 24px;
+        }
+        #SensorPill QPushButton { 
+            font-size: 9px; 
+            font-weight: bold; 
+            background-color: transparent; 
+            color: #888; 
+            border-radius: 10px;
+            padding: 0px;
+            margin: 0px;
+            border: none;
+            max-height: 20px;
+            min-height: 20px;
+        }
+        #SensorPill QPushButton:hover { color: #ccc; }
+        #SensorPill QPushButton[active="true"] { 
+            background-color: #d63333; 
+            color: white; 
+        }
         
         #BackBtn { background-color: #3e3e42; border: none; padding: 8px; color: white; border-radius: 4px; }
         #BackBtn:hover { background-color: #505050; }
@@ -482,9 +578,16 @@ class MainWindow(QMainWindow):
             ("Fan Control", self.show_fan_control),
             ("Calibration", self.show_calibration),
             ("Driver Management", self.show_driver),
+        ]
+        
+        # Check if system/board supports Fan Cleaner
+        if self.controller.check_fan_cleaner_capability():
+            menu_items.append(("Fan Cleaner", self.show_fan_cleaner))
+            
+        menu_items.extend([
             ("Options", self.show_options),
             ("About", self.show_about),
-        ]
+        ])
         
         for text, func in menu_items:
             btn = ModernButton(text)
@@ -498,19 +601,16 @@ class MainWindow(QMainWindow):
 
     def init_fan_control_page(self):
         self.fan_page = QWidget()
-        layout = QVBoxLayout(self.fan_page)
+        self.fan_layout = layout = QVBoxLayout(self.fan_page)
         
         layout.addStretch()
         
-        container = QFrame()
-        container.setStyleSheet("background-color: #252526; border-radius: 10px; padding: 20px;")
+        self.mode_container = container = QFrame()
+        container.setStyleSheet("background-color: #252526; border-radius: 10px; padding: 10px 15px;")
         container.setFixedWidth(600)
         c_layout = QVBoxLayout(container)
-        
-        container = QFrame()
-        container.setStyleSheet("background-color: #252526; border-radius: 10px; padding: 15px;")
-        container.setFixedWidth(600)
-        c_layout = QVBoxLayout(container)
+        c_layout.setSpacing(4)
+        c_layout.setContentsMargins(0, 0, 0, 0)
         
         mode_layout = QHBoxLayout()
         mode_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -530,7 +630,7 @@ class MainWindow(QMainWindow):
         
         self.set_btn = QPushButton("Set Mode")
         self.set_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.set_btn.setFixedWidth(100)
+        self.set_btn.setFixedWidth(120)
         self.set_btn.setStyleSheet("background-color: #d63333; font-weight: bold; padding: 10px; border-radius: 2px;")
         self.set_btn.clicked.connect(self.apply_fan_mode)
         mode_layout.addWidget(self.set_btn)
@@ -539,7 +639,7 @@ class MainWindow(QMainWindow):
         
         self.manual_widget = QWidget()
         manual_outer_layout = QVBoxLayout(self.manual_widget)
-        manual_outer_layout.setContentsMargins(0, 15, 0, 0)
+        manual_outer_layout.setContentsMargins(0, 5, 0, 0)
         
         manual_row = QWidget()
         manual_row_layout = QHBoxLayout(manual_row)
@@ -553,7 +653,7 @@ class MainWindow(QMainWindow):
         self.manual_spin.setValue(50)
         self.manual_spin.setFixedHeight(40) 
         self.manual_spin.setStyleSheet("padding: 8px")
-        self.manual_spin.valueChanged.connect(lambda: self.manual_unsaved_lbl.setVisible(True))
+        self.manual_spin.valueChanged.connect(self.on_manual_changed)
         manual_row_layout.addWidget(self.manual_spin)
         
         manual_outer_layout.addWidget(manual_row)
@@ -562,55 +662,80 @@ class MainWindow(QMainWindow):
         self.manual_unsaved_lbl.setVisible(False)
         self.manual_unsaved_lbl.setStyleSheet("color: #e65100; font-size: 11px; font-weight: bold;")
         
+        # Do not retain size when hidden so container shrinks when no unsaved changes exist
         sp = self.manual_unsaved_lbl.sizePolicy()
-        sp.setRetainSizeWhenHidden(True)
+        sp.setRetainSizeWhenHidden(False)
         self.manual_unsaved_lbl.setSizePolicy(sp)
         
         manual_outer_layout.addWidget(self.manual_unsaved_lbl, alignment=Qt.AlignmentFlag.AlignRight)
         
         self.manual_widget.setVisible(False)
         c_layout.addWidget(self.manual_widget)
-        
         layout.addWidget(container, alignment=Qt.AlignmentFlag.AlignCenter)
         
-        layout.addStretch()
-        
+        # Curve Editor Container (Sits directly below Mode container)
         self.curve_editor_container = QWidget()
-        self.curve_editor_container.setFixedHeight(450)
+        self.curve_editor_container.setFixedHeight(360)
         curve_layout = QVBoxLayout(self.curve_editor_container)
-        
+        curve_layout.setContentsMargins(0, 5, 0, 5)
         curve_header = QHBoxLayout()
-        curve_header.addWidget(QLabel("Fan Curve Editor"))
+        lbl_curve_title = QLabel("Fan Curve Editor")
+        lbl_curve_title.setToolTip("Controls:\n• Left-Click Drag: Move Point\n• Right-Click: Add New Point\n• Middle-Click: Remove Point")
+        curve_header.addWidget(lbl_curve_title)
+        
+        lbl_hint = QLabel("(Right-click: Add | Middle-click: Remove)")
+        lbl_hint.setStyleSheet("color: #777; font-size: 11px; margin-left: 8px;")
+        curve_header.addWidget(lbl_hint)
         curve_header.addStretch()
         
+        saved_curve = self.controller.config.get("curve", [])
+        self.curve_editor = FanCurveEditor(points=saved_curve if saved_curve else None)
+        self.curve_editor.curveChanged.connect(self.on_curve_changed)
+
         reset_btn = QPushButton("Reset Curve")
         reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         reset_btn.setFixedWidth(100)
         reset_btn.setStyleSheet("background-color: #444; font-size: 11px; padding: 4px; border-radius: 3px; color: white;")
-        reset_btn.clicked.connect(lambda: self.curve_editor.set_points(None))
+        reset_btn.clicked.connect(lambda: self.reset_curve())
         curve_header.addWidget(reset_btn)
         
         curve_layout.addLayout(curve_header)
-        
-        saved_curve = self.controller.config.get("curve", [])
-        self.curve_editor = FanCurveEditor(points=saved_curve if saved_curve else None)
-        self.curve_editor.curveChanged.connect(lambda: self.curve_unsaved_lbl.setVisible(True))
         curve_layout.addWidget(self.curve_editor)
         
+        unsaved_row = QHBoxLayout()
+        unsaved_row.addStretch()
+
         self.curve_unsaved_lbl = QLabel("Unsaved Changes")
         self.curve_unsaved_lbl.setVisible(False)
-        self.curve_unsaved_lbl.setStyleSheet("color: #e65100; font-size: 11px; font-weight: bold;") 
+        self.curve_unsaved_lbl.setStyleSheet("color: #e65100; font-size: 11px; font-weight: bold; margin-right: 8px;") 
+        sp_lbl = self.curve_unsaved_lbl.sizePolicy()
+        sp_lbl.setRetainSizeWhenHidden(True)
+        self.curve_unsaved_lbl.setSizePolicy(sp_lbl)
+        unsaved_row.addWidget(self.curve_unsaved_lbl)
+
+        self.curve_revert_btn = QPushButton("Revert")
+        self.curve_revert_btn.setVisible(False)
+        self.curve_revert_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.curve_revert_btn.setFixedWidth(70)
+        self.curve_revert_btn.setStyleSheet("""
+            QPushButton { background-color: #333; color: #ddd; font-size: 11px; padding: 3px 8px; border-radius: 3px; border: 1px solid #555; }
+            QPushButton:hover { background-color: #444; color: #fff; border: 1px solid #777; }
+        """)
+        self.curve_revert_btn.clicked.connect(self.revert_curve)
+        sp_btn = self.curve_revert_btn.sizePolicy()
+        sp_btn.setRetainSizeWhenHidden(True)
+        self.curve_revert_btn.setSizePolicy(sp_btn)
+        unsaved_row.addWidget(self.curve_revert_btn)
+
+        curve_layout.addLayout(unsaved_row)
         
-        sp_c = self.curve_unsaved_lbl.sizePolicy()
-        sp_c.setRetainSizeWhenHidden(True)
-        self.curve_unsaved_lbl.setSizePolicy(sp_c)
-        
-        curve_layout.addWidget(self.curve_unsaved_lbl, alignment=Qt.AlignmentFlag.AlignRight)
-        
-        curve_layout.addSpacing(20)
-        
-        # Stress Test Controls in Curve Tab
-        stress_layout = QHBoxLayout()
+        self.curve_editor_container.setVisible(False)
+        layout.addWidget(self.curve_editor_container)
+
+        # Stress Test Controls (Always visible)
+        self.stress_widget = QWidget()
+        stress_layout = QHBoxLayout(self.stress_widget)
+        stress_layout.setContentsMargins(0, 5, 0, 5)
         stress_layout.addStretch() # Add stretch at start to center
         stress_layout.addWidget(QLabel("CPU Stress Test:"))
         
@@ -636,17 +761,31 @@ class MainWindow(QMainWindow):
         
         stress_layout.addStretch()
         
-        curve_layout.addLayout(stress_layout)
-        
-        self.curve_editor_container.setVisible(False)
-        layout.addWidget(self.curve_editor_container)
+        layout.addWidget(self.stress_widget)
 
         # Watchdog
         self.watchdog_check = QCheckBox("Enable Watchdog (Reset every 90s)")
         self.watchdog_check.toggled.connect(self.toggle_watchdog)
         layout.addWidget(self.watchdog_check)
         
+        # Stretch at bottom pushes everything up snugly
+        layout.addStretch()
+        
+        # Restore last saved mode and manual speed
+        self.restore_saved_fan_settings()
         self.stack.addWidget(self.fan_page)
+
+    def restore_saved_fan_settings(self):
+        saved_mode = self.controller.config.get("mode", "auto").capitalize()
+        if saved_mode in ["Auto", "Max", "Manual", "Curve"]:
+            self.mode_combo.setCurrentText(saved_mode)
+            
+        saved_pwm = self.controller.config.get("manual_pwm", -1)
+        if saved_pwm >= 0:
+            percent_val = int(round((saved_pwm / 255.0) * 100))
+            self.manual_spin.setValue(min(max(percent_val, 0), 100))
+
+        self.on_mode_change(self.mode_combo.currentText())
 
     def init_calibration_page(self):
         page = QWidget()
@@ -664,7 +803,8 @@ class MainWindow(QMainWindow):
         
         self.cal_btn = QPushButton("Start Calibration")
         self.cal_btn.setFixedWidth(200)
-        self.cal_btn.clicked.connect(self.start_calibration)
+        self.cal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cal_btn.clicked.connect(self.toggle_calibration)
         c_layout.addWidget(self.cal_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         
         c_layout.addSpacing(20)
@@ -677,7 +817,7 @@ class MainWindow(QMainWindow):
         c_layout.addSpacing(20)
         
         self.cal_result = QLabel("")
-        self.cal_result.setStyleSheet("font-size: 18px; color: #d63333;")
+        self.cal_result.setStyleSheet("font-size: 18px; color: #d63333; font-weight: bold;")
         self.cal_result.setAlignment(Qt.AlignmentFlag.AlignCenter)
         c_layout.addWidget(self.cal_result, alignment=Qt.AlignmentFlag.AlignCenter)
         
@@ -750,29 +890,33 @@ class MainWindow(QMainWindow):
         
         lbl1 = QLabel("Calibration Wait Time (s):")
         lbl1.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lbl1.setToolTip("Calibration Wait Time: How long (in seconds) the system waits at max fan speed to get a stable RPM reading during calibration.")
         form_grid.addWidget(lbl1, 0, 0, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         self.wait_spin = QSpinBox()
         self.wait_spin.setRange(5, 300)
         self.wait_spin.setFixedWidth(80) 
         self.wait_spin.setValue(self.controller.config.get("calibration_wait", 30))
+        self.wait_spin.setToolTip("Calibration Wait Time: How long (in seconds) the system waits at max fan speed to get a stable RPM reading during calibration.")
         self.wait_spin.valueChanged.connect(self.save_options)
         form_grid.addWidget(self.wait_spin, 0, 1, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         lbl2 = QLabel("Temp Smoothing (N):")
         lbl2.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lbl2.setToolTip("Temp Smoothing: Number of temperature samples to average.\nHigher values prevent fans from 'pulsing' during rapid temperature spikes but slightly increase reaction time.")
         form_grid.addWidget(lbl2, 1, 0, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         self.ma_spin = QSpinBox()
         self.ma_spin.setRange(1, 20)
         self.ma_spin.setFixedWidth(80)
         self.ma_spin.setValue(self.controller.config.get("ma_window", 5))
-        self.ma_spin.setToolTip("Moving Average Window: Number of temperature samples to average.\nHigher values smooth out fan response preventing rapid speed changes, but increase reaction latency.")
+        self.ma_spin.setToolTip("Temp Smoothing: Number of temperature samples to average.\nHigher values prevent fans from 'pulsing' during rapid temperature spikes but slightly increase reaction time.")
         self.ma_spin.valueChanged.connect(self.save_options)
         form_grid.addWidget(self.ma_spin, 1, 1, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         lbl3 = QLabel("Curve Interpolation:")
         lbl3.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lbl3.setToolTip("Curve Interpolation Mode:\n- Smooth: Smoothly transitions fan speed between points (Responsive).\n- Discrete: Jumps between points like stairs. Can prevent fan motor wear by reducing the frequency of micro-adjustments.")
         form_grid.addWidget(lbl3, 2, 0, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         self.interp_combo = QComboBox()
@@ -780,18 +924,40 @@ class MainWindow(QMainWindow):
         self.interp_combo.setFixedWidth(120)
         current_interp = self.controller.config.get("curve_interpolation", "smooth")
         self.interp_combo.setCurrentText(current_interp.capitalize())
+        self.interp_combo.setToolTip("Curve Interpolation Mode:\n- Smooth: Smoothly transitions fan speed between points (Responsive).\n- Discrete: Jumps between points like stairs. Can prevent fan motor wear by reducing the frequency of micro-adjustments.")
         self.interp_combo.currentTextChanged.connect(self.save_options)
         form_grid.addWidget(self.interp_combo, 2, 1, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+        lbl_log = QLabel("Log Level:")
+        lbl_log.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lbl_log.setToolTip("Controls logging verbosity:\n- DEBUG: Prints all raw WMI and fan events.\n- INFO: Operational logs (Default).\n- WARNING: Warnings and errors only.\n- ERROR: Critical errors only.\n- QUIET: Silent mode.")
+        form_grid.addWidget(lbl_log, 3, 0, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        
+        self.loglevel_combo = QComboBox()
+        self.loglevel_combo.addItems(["DEBUG", "INFO", "WARNING", "ERROR", "QUIET"])
+        self.loglevel_combo.setFixedWidth(120)
+        current_log_level = self.controller.config.get("log_level", "INFO").upper()
+        self.loglevel_combo.setCurrentText(current_log_level)
+        self.loglevel_combo.currentTextChanged.connect(self.save_options)
+        form_grid.addWidget(self.loglevel_combo, 3, 1, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         self.bypass_check = QCheckBox("Bypass Driver Patch Warning")
         self.bypass_check.setChecked(self.controller.config.get("bypass_patch_warning", False))
         self.bypass_check.toggled.connect(self.save_options)
-        form_grid.addWidget(self.bypass_check, 3, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.bypass_check.toggled.connect(lambda: self.controller.save_config())
+        form_grid.addWidget(self.bypass_check, 4, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         self.bypass_root_check = QCheckBox("Bypass Root Warning")
         self.bypass_root_check.setChecked(self.controller.config.get("bypass_root_warning", False))
         self.bypass_root_check.toggled.connect(self.save_options)
-        form_grid.addWidget(self.bypass_root_check, 4, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.bypass_root_check.toggled.connect(lambda: self.controller.save_config())
+        form_grid.addWidget(self.bypass_root_check, 5, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+
+        self.shutdown_hook_check = QCheckBox("Enable Fan Cleanup on Shutdown (Set to 30%)")
+        self.shutdown_hook_check.setToolTip("Creates a systemd shutdown hook to ensure fans are reset to a quiet 30% speed\nwhen shutting down or rebooting. Prevents fans being stuck at high speed\nuntil the service is back up")
+        self.shutdown_hook_check.setChecked(self.controller.is_shutdown_service_enabled())
+        self.shutdown_hook_check.toggled.connect(self.toggle_shutdown_hook)
+        form_grid.addWidget(self.shutdown_hook_check, 6, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         # Experimental Support Section
         exp_group = QWidget()
@@ -802,6 +968,7 @@ class MainWindow(QMainWindow):
         self.exp_check.setStyleSheet("color: #ff9800; font-weight: bold;")
         self.exp_check.setChecked(self.controller.config.get("enable_experimental", False))
         self.exp_check.toggled.connect(self.toggle_experimental_options)
+        self.exp_check.toggled.connect(lambda: self.controller.save_config())
         
         supp_status, _ = self.controller.check_board_support()
         # Force POSSIBLY_SUPPORTED behavior for debugging
@@ -858,10 +1025,81 @@ class MainWindow(QMainWindow):
         
         exp_layout.addWidget(self.exp_options_widget)
         
-        form_grid.addWidget(exp_group, 5, 0, 1, 2)
+        form_grid.addWidget(exp_group, 6, 0, 1, 2)
         
         # Init visibility
         self.toggle_experimental_options(self.exp_check.isChecked())
+
+        # 4. Manual Max Fan Speed (Calibration Bypass)
+        manual_max_box = QVBoxLayout()
+        manual_max_box.setSpacing(3)
+
+        input_row = QHBoxLayout()
+        self.manual_max_check = QCheckBox("Use Manual Max RPM (Bypass Calibration)")
+        self.manual_max_check.setToolTip("Allows setting a manual Max Fan RPM (e.g. 5800 RPM) to patch the driver without needing live calibration.")
+        self.manual_max_check.setChecked(self.controller.config.get("use_manual_max_rpm", False))
+        self.manual_max_check.toggled.connect(self.toggle_manual_max_rpm)
+        input_row.addWidget(self.manual_max_check)
+
+        self.manual_max_spin = QSpinBox()
+        self.manual_max_spin.setRange(4000, 7000)
+        self.manual_max_spin.setSingleStep(100)
+        self.manual_max_spin.setFixedWidth(80)
+        self.manual_max_spin.setValue(self.controller.config.get("manual_max_rpm", 5800))
+        self.manual_max_spin.setEnabled(self.manual_max_check.isChecked())
+        self.manual_max_spin.valueChanged.connect(self.on_manual_max_spin_changed)
+        input_row.addWidget(self.manual_max_spin)
+
+        self.manual_max_save_btn = QPushButton("Save")
+        self.manual_max_save_btn.setFixedWidth(60)
+        self.manual_max_save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.manual_max_save_btn.setStyleSheet("""
+            QPushButton { background-color: #3a3a3c; color: white; font-weight: bold; border-radius: 4px; padding: 4px; border: 1px solid #555; }
+            QPushButton:hover { background-color: #4a4a4c; border: 1px solid #777; }
+        """)
+        self.manual_max_save_btn.setEnabled(self.manual_max_check.isChecked())
+        self.manual_max_save_btn.clicked.connect(self.save_manual_max_rpm)
+        input_row.addWidget(self.manual_max_save_btn)
+        input_row.addStretch()
+
+        manual_max_box.addLayout(input_row)
+
+        self.manual_max_source_lbl = QLabel("")
+        self.manual_max_source_lbl.setStyleSheet("margin-left: 24px; font-size: 11px;")
+        manual_max_box.addWidget(self.manual_max_source_lbl)
+
+        form_grid.addLayout(manual_max_box, 7, 0, 1, 2)
+
+        # 5. Windows OMEN Config & Settings Backup Group (Symmetrical Layout)
+        btn_group_box = QVBoxLayout()
+        btn_group_box.setSpacing(10)
+
+        self.get_win_cfg_btn = QPushButton("Get Configuration from Windows")
+        self.get_win_cfg_btn.setToolTip("Import CleanCreek fan settings and Max Fan RPM from Windows PowerControlConfig.json or mount directory.")
+        self.get_win_cfg_btn.setStyleSheet("background-color: #0e639c; font-weight: bold; padding: 9px; border-radius: 4px; color: white;")
+        self.get_win_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.get_win_cfg_btn.clicked.connect(self.import_windows_config_dialog)
+        btn_group_box.addWidget(self.get_win_cfg_btn)
+
+        backup_box = QHBoxLayout()
+        backup_box.setSpacing(12)
+
+        self.export_cfg_btn = QPushButton("Export Settings JSON")
+        self.export_cfg_btn.setStyleSheet("background-color: #333; padding: 8px; border-radius: 4px; color: white;")
+        self.export_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.export_cfg_btn.clicked.connect(self.export_settings_dialog)
+        backup_box.addWidget(self.export_cfg_btn, 1)
+
+        self.import_cfg_btn = QPushButton("Import Settings JSON")
+        self.import_cfg_btn.setStyleSheet("background-color: #333; padding: 8px; border-radius: 4px; color: white;")
+        self.import_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.import_cfg_btn.clicked.connect(self.import_settings_dialog)
+        backup_box.addWidget(self.import_cfg_btn, 1)
+
+        btn_group_box.addLayout(backup_box)
+        form_grid.addLayout(btn_group_box, 8, 0, 1, 2)
+
+        self.update_manual_max_source_label()
         
         layout.addWidget(form_widget, alignment=Qt.AlignmentFlag.AlignCenter)
         
@@ -990,19 +1228,37 @@ class MainWindow(QMainWindow):
     def show_driver(self): self.show_page(self.stack.widget(3), "Driver Management")
     def show_options(self): self.show_page(self.stack.widget(4), "Options")
     def show_about(self): self.show_page(self.stack.widget(5), "About")
+    def show_fan_cleaner(self): self.show_page(self.cleaner_page, "Fan Cleaner")
+
+    def set_reference_sensor(self, sensor):
+        self.controller.config["reference_sensor"] = sensor
+        self.controller.save_config()
+        self.update_status()
 
     # Core Logic
     def update_status(self, temp_override=None):
-        rpm = self.controller.get_fan_speed()
+        rpm, in_reverse = self.controller.get_fan_speed_info()
         if temp_override is not None:
              temp = int(temp_override)
         else:
-             temp = self.controller.get_cpu_temp()
-        
-        self.rpm_label.setText(f"{rpm} RPM")
+             temp = self.controller.get_reference_temp()
+
+        rpm_str = f"-{rpm} RPM" if (in_reverse and rpm > 0) else f"{rpm} RPM"
+        self.rpm_label.setText(rpm_str)
         self.temp_label.setText(f"{temp}°C")
         
+        sensor = self.controller.config.get("reference_sensor", "cpu")
+        self.cpu_pill_btn.setProperty("active", sensor == "cpu")
+        self.gpu_pill_btn.setProperty("active", sensor == "gpu")
+        
+        # Refresh styling for property changes
+        self.cpu_pill_btn.style().unpolish(self.cpu_pill_btn)
+        self.cpu_pill_btn.style().polish(self.cpu_pill_btn)
+        self.gpu_pill_btn.style().unpolish(self.gpu_pill_btn)
+        self.gpu_pill_btn.style().polish(self.gpu_pill_btn)
+        
         self.check_driver_status()
+        self.update_cleaner_status()
 
     def check_driver_status(self):
         # Don't overwrite status if we are in the middle of an operation
@@ -1032,6 +1288,51 @@ class MainWindow(QMainWindow):
         
         self.manual_unsaved_lbl.setVisible(False)
         self.curve_unsaved_lbl.setVisible(False)
+        if hasattr(self, "curve_revert_btn"):
+            self.curve_revert_btn.setVisible(False)
+        self.set_btn.setText("Set Mode")
+        
+        # Dynamically move stress controls depending on whether Curve Editor is visible
+        if hasattr(self, "stress_widget") and hasattr(self, "fan_layout"):
+            self.fan_layout.removeWidget(self.stress_widget)
+            
+            if text == "Curve":
+                # Place below curve editor container (above watchdog)
+                idx = self.fan_layout.indexOf(self.curve_editor_container)
+                self.fan_layout.insertWidget(idx + 1, self.stress_widget)
+            else:
+                # Place directly below Mode Container (above the stretch)
+                idx = self.fan_layout.indexOf(self.mode_container)
+                self.fan_layout.insertWidget(idx + 1, self.stress_widget)
+
+    def on_manual_changed(self):
+        self.manual_unsaved_lbl.setVisible(True)
+        if self.mode_combo.currentText() == "Manual":
+            self.set_btn.setText("Save Speed")
+
+    def on_curve_changed(self):
+        self.curve_unsaved_lbl.setVisible(True)
+        if hasattr(self, "curve_revert_btn"):
+            self.curve_revert_btn.setVisible(True)
+        if self.mode_combo.currentText() == "Curve":
+            self.set_btn.setText("Save Curve")
+
+    def reset_curve(self):
+        default_points = [(40, 20), (55, 40), (70, 65), (85, 90), (95, 100)]
+        self.curve_editor.set_points(default_points)
+        self.on_curve_changed()
+
+    def revert_curve(self):
+        saved_curve = self.controller.config.get("curve", [])
+        if not saved_curve:
+            saved_curve = [(40, 20), (55, 40), (70, 65), (85, 90), (95, 100)]
+        self.curve_editor.set_points(saved_curve)
+        self.curve_unsaved_lbl.setVisible(False)
+        if hasattr(self, "curve_revert_btn"):
+            self.curve_revert_btn.setVisible(False)
+        if self.mode_combo.currentText() == "Curve":
+            self.set_btn.setText("Set Mode")
+        self.status_label.setText("Fan curve reverted to saved settings.")
 
     def apply_fan_mode(self):
         mode = self.mode_combo.currentText().lower()
@@ -1063,6 +1364,9 @@ class MainWindow(QMainWindow):
         
         self.manual_unsaved_lbl.setVisible(False)
         self.curve_unsaved_lbl.setVisible(False)
+        if hasattr(self, "curve_revert_btn"):
+            self.curve_revert_btn.setVisible(False)
+        self.set_btn.setText("Set Mode")
         
         # If service is running, we just save config and let service handle it
         if self.controller.is_service_running():
@@ -1152,14 +1456,23 @@ class MainWindow(QMainWindow):
         else:
             self.controller.set_fan_pwm(pwm_val)
 
+    def toggle_calibration(self):
+        if getattr(self, "cal_running", False):
+            self.stop_calibration()
+        else:
+            self.start_calibration()
+
     def start_calibration(self):
         if hasattr(self, 'curve_timer'):
             self.curve_timer.stop()
         
+        self.last_mode_before_cal = self.controller.config.get("mode", "auto")
+        self.cal_running = True
         self.controller.config["mode"] = "calibration"
         self.controller.save_config()
             
-        self.cal_btn.setEnabled(False)
+        self.cal_btn.setText("Stop Calibration")
+        self.cal_btn.setStyleSheet("background-color: #d63333; color: white; font-weight: bold;")
         self.cal_progress.setVisible(True)
         self.cal_progress.setRange(0, 100)
         self.cal_progress.setValue(0)
@@ -1170,15 +1483,59 @@ class MainWindow(QMainWindow):
         self.cal_thread.finished.connect(self.on_cal_finished)
         self.cal_thread.start()
 
-    def on_cal_finished(self, max_rpm):
-        self.cal_btn.setEnabled(True)
+    def stop_calibration(self):
+        self.cal_running = False
+        if hasattr(self, "cal_thread") and self.cal_thread.isRunning():
+            self.cal_thread.terminate()
+            self.cal_thread.wait()
+        
+        self.cal_btn.setText("Start Calibration")
+        self.cal_btn.setStyleSheet("")
         self.cal_progress.setVisible(False)
-        self.cal_result.setText(f"Max RPM: {max_rpm}")
-        self.status_label.setText(f"Calibration done. Max RPM: {max_rpm}")
+        self.status_label.setText("Calibration stopped. Fans restored to previous mode.")
         
+        # Restore mode before calibration
+        prev_mode = getattr(self, "last_mode_before_cal", "auto")
+        if prev_mode == "calibration":
+            prev_mode = "auto"
+        self.controller.config["mode"] = prev_mode
+        self.controller.save_config()
         self.apply_fan_mode()
+
+    def on_cal_finished(self, max_rpm):
+        if not getattr(self, "cal_running", False):
+            return
         
-        QMessageBox.information(self, "Calibration", f"Calibration Complete.\nMax RPM: {max_rpm}")
+        self.cal_running = False
+        self.cal_btn.setText("Start Calibration")
+        self.cal_btn.setStyleSheet("")
+        self.cal_progress.setVisible(False)
+        
+        # Reset mode back to auto/previous
+        prev_mode = getattr(self, "last_mode_before_cal", "auto")
+        if prev_mode == "calibration":
+            prev_mode = "auto"
+        self.controller.config["mode"] = prev_mode
+        self.controller.save_config()
+
+        if max_rpm == 0:
+            self.cal_result.setText("Max RPM: 0 (Sensor Unreadable)")
+            self.status_label.setText("Calibration returned 0 RPM.")
+            self.apply_fan_mode()
+            
+            warn_msg = (
+                "Calibration returned 0 RPM!\n\n"
+                "This typically occurs on Linux kernel versions where sysfs fan speed reading is unavailable.\n\n"
+                "Recommended Solution:\n"
+                "1. Go to Options and click 'Get Configuration from Windows' (Recommended).\n"
+                "2. Or enable 'Use Manual Max RPM (Bypass Calibration)' to specify your Max RPM directly."
+            )
+            QMessageBox.warning(self, "Calibration Result: 0 RPM", warn_msg)
+        else:
+            self.cal_result.setText(f"Max RPM: {max_rpm}")
+            self.status_label.setText(f"Calibration done. Max RPM: {max_rpm}")
+            self.apply_fan_mode()
+            QMessageBox.information(self, "Calibration", f"Calibration Complete.\nMax RPM: {max_rpm}")
 
     def run_driver_task(self, type_, force=False):
         if type_ == "temp":
@@ -1227,6 +1584,7 @@ class MainWindow(QMainWindow):
         self.controller.config['calibration_wait'] = self.wait_spin.value()
         self.controller.config['ma_window'] = self.ma_spin.value()
         self.controller.config['curve_interpolation'] = self.interp_combo.currentText().lower()
+        self.controller.config['log_level'] = self.loglevel_combo.currentText()
         self.controller.config['bypass_patch_warning'] = self.bypass_check.isChecked()
         self.controller.config['bypass_root_warning'] = self.bypass_root_check.isChecked()
         
@@ -1255,6 +1613,128 @@ class MainWindow(QMainWindow):
     def toggle_experimental_options(self, checked):
         self.exp_options_widget.setVisible(checked)
         self.save_options()
+
+    def toggle_manual_max_rpm(self, checked):
+        self.controller.config["use_manual_max_rpm"] = checked
+        self.manual_max_spin.setEnabled(checked)
+        if hasattr(self, "manual_max_save_btn"):
+            self.manual_max_save_btn.setEnabled(checked)
+        self.save_manual_max_rpm()
+
+    def on_manual_max_spin_changed(self):
+        self.update_manual_max_source_label()
+
+    def save_manual_max_rpm(self):
+        val = self.manual_max_spin.value()
+        self.controller.config["manual_max_rpm"] = val
+        self.controller.save_config()
+        self.update_manual_max_source_label()
+        self.status_label.setText(f"Manual Max RPM set to {val} RPM.")
+
+    def update_manual_max_source_label(self):
+        if not hasattr(self, "manual_max_source_lbl"):
+            return
+        
+        current_val = self.manual_max_spin.value()
+        win_rpm = self.controller.config.get("windows_max_rpm")
+        
+        if win_rpm is not None and current_val == win_rpm and self.controller.config.get("windows_config_imported", False):
+            self.manual_max_source_lbl.setText("(Sourced from Windows OMEN Config)")
+            self.manual_max_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold; margin-left: 24px;")
+        elif self.manual_max_check.isChecked():
+            self.manual_max_source_lbl.setText("(User Specified)")
+            self.manual_max_source_lbl.setStyleSheet("color: #2196f3; font-size: 11px; font-weight: bold; margin-left: 24px;")
+        elif self.controller.config.get("fan_max", 0) > 0:
+            self.manual_max_source_lbl.setText("(Live Calibrated)")
+            self.manual_max_source_lbl.setStyleSheet("color: #ff9800; font-size: 11px; font-weight: bold; margin-left: 24px;")
+        else:
+            self.manual_max_source_lbl.setText("")
+
+    def import_windows_config_dialog(self):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Import Windows OMEN Configuration")
+        msg_box.setText("Select your mounted Windows drive folder (e.g. /run/media/...) OR pick PowerControlConfig.json directly.")
+        btn_dir = msg_box.addButton("Select Windows Mount Folder", QMessageBox.ButtonRole.ActionRole)
+        btn_file = msg_box.addButton("Select PowerControlConfig.json File", QMessageBox.ButtonRole.ActionRole)
+        btn_cancel = msg_box.addButton(QMessageBox.StandardButton.Cancel)
+
+        msg_box.exec()
+        clicked = msg_box.clickedButton()
+
+        chosen_path = None
+        if clicked == btn_dir:
+            chosen_path = QFileDialog.getExistingDirectory(self, "Select Windows Mount Directory", "/run/media")
+        elif clicked == btn_file:
+            file_tuple = QFileDialog.getOpenFileName(self, "Select PowerControlConfig.json", "/run/media", "Config Files (*.json);;All Files (*)")
+            chosen_path = file_tuple[0] if file_tuple else None
+
+        if not chosen_path:
+            return
+
+        success, msg, parsed = self.controller.import_windows_omen_config(chosen_path)
+        if success:
+            cpu = parsed.get("cleaner_cpu_speed", 37)
+            gpu = parsed.get("cleaner_gpu_speed", 39)
+            dur = parsed.get("cleaner_duration_sec", 30)
+            max_rpm = parsed.get("manual_max_rpm", 5800)
+            
+            # Refresh GUI widgets
+            self.manual_max_check.setChecked(True)
+            self.manual_max_spin.setValue(max_rpm)
+            self.update_manual_max_source_label()
+
+            info_text = (
+                f"Configuration successfully imported!\n\n"
+                f"• CleanCreek CPU Speed: {cpu} ({cpu*100} RPM)\n"
+                f"• CleanCreek GPU Speed: {gpu} ({gpu*100} RPM)\n"
+                f"• Active Clean Duration: {dur} seconds\n"
+                f"• Extracted Max Fan RPM: {max_rpm} RPM\n\n"
+                f"These values have been permanently saved to this program's own configuration.\n"
+                f"You may now safely unmount your Windows drive if you desire to do so."
+            )
+            QMessageBox.information(self, "Import Successful", info_text)
+        else:
+            QMessageBox.critical(self, "Import Error", msg)
+
+    def export_settings_dialog(self):
+        file_tuple = QFileDialog.getSaveFileName(self, "Export Application Settings", "omen_fan_control_settings.json", "JSON Files (*.json)")
+        if file_tuple[0]:
+            success, msg = self.controller.export_app_settings(file_tuple[0])
+            if success:
+                QMessageBox.information(self, "Export Settings", msg)
+            else:
+                QMessageBox.critical(self, "Export Error", msg)
+
+    def import_settings_dialog(self):
+        file_tuple = QFileDialog.getOpenFileName(self, "Import Application Settings", "", "JSON Files (*.json)")
+        if file_tuple[0]:
+            success, msg = self.controller.import_app_settings(file_tuple[0])
+            if success:
+                # Refresh GUI controls to match imported config
+                self.wait_spin.setValue(self.controller.config.get("calibration_wait", 30))
+                self.ma_spin.setValue(self.controller.config.get("ma_window", 5))
+                self.loglevel_combo.setCurrentText(self.controller.config.get("log_level", "INFO").upper())
+                self.manual_max_check.setChecked(self.controller.config.get("use_manual_max_rpm", False))
+                self.manual_max_spin.setValue(self.controller.config.get("manual_max_rpm", 5800))
+                QMessageBox.information(self, "Import Settings", msg)
+            else:
+                QMessageBox.critical(self, "Import Error", msg)
+
+    def toggle_shutdown_hook(self, enabled):
+        if enabled:
+            success, msg = self.controller.create_shutdown_service()
+        else:
+            success, msg = self.controller.remove_shutdown_service()
+        
+        if not success:
+            QMessageBox.critical(self, "Service Error", msg)
+            self.shutdown_hook_check.setChecked(not enabled)
+        else:
+            self.status_label.setText(msg)
+            # Ensure main daemon is running if installed
+            if self.controller.is_service_installed() and not self.controller.is_service_running():
+                self.controller.start_service()
+                QTimer.singleShot(1000, self.check_service_status)
 
     def toggle_bios(self):
         is_currently_enabled = "Disable" in self.bios_btn.text()
@@ -1396,10 +1876,428 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Ensure clean shutdown of threads and processes."""
+        if self.controller.config.get("cleaner_in_progress", False):
+            self.controller.emergency_stop_fan_cleaning()
         self.controller.stop_stress_test()
         self.watchdog_timer.stop()
         self.rpm_timer.stop()
         event.accept()
+
+    def init_cleaner_page(self):
+        self.cleaner_page = QWidget()
+        layout = QVBoxLayout(self.cleaner_page)
+        
+        layout.addStretch()
+        
+        container = QFrame()
+        container.setStyleSheet("background-color: #252526; border-radius: 10px; padding: 12px 18px;")
+        container.setFixedWidth(600)
+        c_layout = QVBoxLayout(container)
+        c_layout.setSpacing(9)
+        
+        # 1. Automatic Fan Cleaner Toggle & Description
+        auto_box = QVBoxLayout()
+        auto_box.setSpacing(2)
+
+        self.auto_cleaner_check = QCheckBox("Enable Automatic Fan Cleaner")
+        self.auto_cleaner_check.setStyleSheet("font-size: 15px; font-weight: bold; margin-bottom: 0px;")
+        self.auto_cleaner_check.setChecked(self.controller.config.get("cleaner_enabled", False))
+        self.auto_cleaner_check.toggled.connect(self.toggle_auto_cleaner)
+        auto_box.addWidget(self.auto_cleaner_check)
+
+        self.cleaner_info_lbl = QLabel("")
+        self.cleaner_info_lbl.setWordWrap(True)
+        self.cleaner_info_lbl.setMinimumHeight(38)
+        self.cleaner_info_lbl.setStyleSheet("color: #aaa; font-size: 12px; margin-left: 24px; margin-top: 2px; margin-bottom: 2px;")
+        auto_box.addWidget(self.cleaner_info_lbl)
+        
+        c_layout.addLayout(auto_box)
+
+        # 2. Custom Interval Selection
+        custom_box = QVBoxLayout()
+        custom_box.setSpacing(4)
+
+        self.custom_interval_check = QCheckBox("Use Custom Interval")
+        self.custom_interval_check.setStyleSheet("font-size: 14px; font-weight: bold;")
+        is_custom = self.controller.config.get("cleaner_custom_interval", False)
+        self.custom_interval_check.setChecked(is_custom)
+        self.custom_interval_check.toggled.connect(self.toggle_custom_interval)
+        custom_box.addWidget(self.custom_interval_check)
+
+        input_row = QHBoxLayout()
+        input_row.setContentsMargins(24, 0, 0, 0)
+        input_row.setSpacing(10)
+
+        self.interval_lbl = QLabel("Interval (hours):")
+        input_row.addWidget(self.interval_lbl)
+
+        self.interval_input = QLineEdit()
+        self.interval_input.setFixedWidth(80)
+        current_hours = self.controller.config.get("cleaner_interval", 14400) / 3600.0
+        self.interval_input.setText(f"{current_hours:.1f}")
+        input_row.addWidget(self.interval_input)
+
+        self.save_interval_btn = QPushButton("Save")
+        self.save_interval_btn.setFixedWidth(75)
+        self.save_interval_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.save_interval_btn.clicked.connect(self.save_cleaner_interval)
+        input_row.addWidget(self.save_interval_btn)
+        input_row.addStretch()
+
+        custom_box.addLayout(input_row)
+        c_layout.addLayout(custom_box)
+
+        self.update_custom_interval_style(is_custom)
+
+        # 3. Cleaning Duration Override Section
+        duration_box = QVBoxLayout()
+        duration_box.setSpacing(2)
+
+        duration_row = QHBoxLayout()
+        duration_row.setContentsMargins(24, 0, 0, 0)
+        duration_row.setSpacing(10)
+
+        duration_lbl = QLabel("Cleaning Duration (seconds):")
+        duration_lbl.setStyleSheet("font-size: 13px;")
+        duration_row.addWidget(duration_lbl)
+
+        self.cleaner_duration_spin = QSpinBox()
+        self.cleaner_duration_spin.setRange(5, 120)
+        self.cleaner_duration_spin.setSingleStep(5)
+        self.cleaner_duration_spin.setFixedWidth(85)
+        self.cleaner_duration_spin.setFixedHeight(30)
+        self.cleaner_duration_spin.setStyleSheet("padding: 2px 4px;")
+        current_dur = self.controller.config.get("cleaner_duration", 30)
+        self.cleaner_duration_spin.setValue(current_dur)
+        self.cleaner_duration_spin.valueChanged.connect(self.on_cleaner_duration_changed)
+        duration_row.addWidget(self.cleaner_duration_spin)
+
+        self.save_duration_btn = QPushButton("Save")
+        self.save_duration_btn.setFixedWidth(75)
+        self.save_duration_btn.setFixedHeight(30)
+        self.save_duration_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.save_duration_btn.setStyleSheet("""
+            QPushButton { background-color: #3a3a3c; color: white; font-weight: bold; border-radius: 4px; padding: 2px 10px; border: 1px solid #555; }
+            QPushButton:hover { background-color: #4a4a4c; border: 1px solid #777; }
+        """)
+        self.save_duration_btn.clicked.connect(self.save_cleaner_duration)
+        duration_row.addWidget(self.save_duration_btn)
+        duration_row.addStretch()
+
+        duration_box.addLayout(duration_row)
+
+        self.cleaner_duration_source_lbl = QLabel("")
+        duration_box.addWidget(self.cleaner_duration_source_lbl)
+
+        c_layout.addLayout(duration_box)
+
+        self.update_cleaner_info_text()
+        self.update_cleaner_duration_source_label()
+
+        # Separator line
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        sep.setStyleSheet("background-color: #444;")
+        c_layout.addWidget(sep)
+
+        # Live Status Card
+        status_card = QFrame()
+        status_card.setObjectName("statusCard")
+        status_card.setStyleSheet("QFrame#statusCard { background-color: #1a1a1a; border-radius: 8px; border: 1px solid #333; }")
+        status_card_layout = QHBoxLayout(status_card)
+        status_card_layout.setContentsMargins(14, 10, 14, 10)
+        status_card_layout.setSpacing(20)
+
+        # Direction badge
+        dir_col = QVBoxLayout()
+        dir_col.setSpacing(4)
+        dir_title = QLabel("Fan Direction")
+        dir_title.setStyleSheet("color: #888; font-size: 10px; font-weight: bold; letter-spacing: 1px;")
+        dir_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cleaner_direction_lbl = QLabel("Forward")
+        self.cleaner_direction_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cleaner_direction_lbl.setStyleSheet(
+            "color: #4caf50; font-size: 13px; font-weight: bold; "
+            "background: #1b3a1e; border-radius: 4px; padding: 4px 8px;"
+        )
+        dir_col.addWidget(dir_title)
+        dir_col.addWidget(self.cleaner_direction_lbl)
+        status_card_layout.addLayout(dir_col)
+
+        # Vertical divider
+        vdiv1 = QFrame()
+        vdiv1.setFrameShape(QFrame.Shape.VLine)
+        vdiv1.setStyleSheet("color: #333;")
+        status_card_layout.addWidget(vdiv1)
+
+        # Cleanup Status
+        elapsed_col = QVBoxLayout()
+        elapsed_col.setSpacing(4)
+        elapsed_title = QLabel("Cleanup Status")
+        elapsed_title.setStyleSheet("color: #888; font-size: 10px; font-weight: bold; letter-spacing: 1px;")
+        elapsed_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cleaner_elapsed_lbl = QLabel("Idle")
+        self.cleaner_elapsed_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cleaner_elapsed_lbl.setStyleSheet("color: #fff; font-size: 13px; font-weight: bold; padding: 2px;")
+        elapsed_col.addWidget(elapsed_title)
+        elapsed_col.addWidget(self.cleaner_elapsed_lbl)
+        status_card_layout.addLayout(elapsed_col)
+
+        # Vertical divider
+        vdiv2 = QFrame()
+        vdiv2.setFrameShape(QFrame.Shape.VLine)
+        vdiv2.setStyleSheet("color: #333;")
+        status_card_layout.addWidget(vdiv2)
+
+        # Last run time
+        lastrun_col = QVBoxLayout()
+        lastrun_col.setSpacing(4)
+        lastrun_title = QLabel("Last Run")
+        lastrun_title.setStyleSheet("color: #888; font-size: 10px; font-weight: bold; letter-spacing: 1px;")
+        lastrun_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cleaner_lastrun_lbl = QLabel("Never")
+        self.cleaner_lastrun_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cleaner_lastrun_lbl.setStyleSheet("color: #ccc; font-size: 13px; padding: 2px;")
+        lastrun_col.addWidget(lastrun_title)
+        lastrun_col.addWidget(self.cleaner_lastrun_lbl)
+        status_card_layout.addLayout(lastrun_col)
+
+        c_layout.addWidget(status_card)
+
+        # 3. Manual Clean Button and Emergency Stop Button
+        btn_layout = QHBoxLayout()
+        self.manual_clean_btn = QPushButton("Start Manual Fan Cleaning")
+        self.manual_clean_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.manual_clean_btn.setStyleSheet("""
+            QPushButton { background-color: #2e7d32; font-weight: bold; padding: 10px; border-radius: 4px; color: white; }
+            QPushButton:hover { background-color: #388e3c; }
+        """)
+        self.manual_clean_btn.clicked.connect(self.start_manual_cleaning)
+        btn_layout.addWidget(self.manual_clean_btn)
+        
+        self.emergency_stop_btn = QPushButton("Stop Cleaning Immediately")
+        self.emergency_stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.emergency_stop_btn.setStyleSheet("""
+            QPushButton { background-color: #c62828; font-weight: bold; padding: 10px; border-radius: 4px; color: white; }
+            QPushButton:hover { background-color: #d32f2f; }
+        """)
+        self.emergency_stop_btn.clicked.connect(self.emergency_stop_cleaning)
+        btn_layout.addWidget(self.emergency_stop_btn)
+        
+        c_layout.addLayout(btn_layout)
+        
+        # Safety warning note
+        warn_lbl = QLabel("Safety Note: Fan cleaning does not run if CPU temperature is above 70°C.\n"
+                          "In case of emergency or unexpected behavior, use the Stop button to restore functionality safely.")
+        warn_lbl.setWordWrap(True)
+        warn_lbl.setStyleSheet("color: #e65100; font-size: 10px; font-weight: bold;")
+        c_layout.addWidget(warn_lbl)
+
+        layout.addWidget(container, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch()
+        
+        self.stack.addWidget(self.cleaner_page)
+
+    def toggle_auto_cleaner(self, checked):
+        self.controller.config["cleaner_enabled"] = checked
+        self.controller.save_config()
+        self.update_status()
+
+    def toggle_custom_interval(self, checked):
+        self.controller.config["cleaner_custom_interval"] = checked
+        if not checked:
+            # Revert to default 4 hours (14400 seconds)
+            self.controller.config["cleaner_interval"] = 14400
+            self.interval_input.setText("4.0")
+        self.controller.save_config()
+        self.update_custom_interval_style(checked)
+
+    def update_custom_interval_style(self, checked):
+        self.interval_input.setEnabled(checked)
+        self.save_interval_btn.setEnabled(checked)
+        if checked:
+            self.interval_lbl.setStyleSheet("color: #e0e0e0; font-size: 13px;")
+            self.interval_input.setStyleSheet("background-color: #333; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 4px;")
+            self.save_interval_btn.setStyleSheet("""
+                QPushButton { background-color: #3a3a3c; color: white; font-weight: bold; border-radius: 4px; padding: 4px 10px; border: 1px solid #555; }
+                QPushButton:hover { background-color: #4a4a4c; border: 1px solid #777; }
+            """)
+        else:
+            self.interval_lbl.setStyleSheet("color: #555555; font-size: 13px;")
+            self.interval_input.setStyleSheet("background-color: #1c1c1c; color: #555; border: 1px solid #333; padding: 4px; border-radius: 4px;")
+            self.save_interval_btn.setStyleSheet("""
+                QPushButton { background-color: #222224; color: #555555; border-radius: 4px; padding: 4px 10px; border: 1px solid #333; }
+            """)
+
+    def save_cleaner_interval(self):
+        try:
+            hours = float(self.interval_input.text())
+            min_hours = 5.0 / 60.0 # 5 minutes = 0.0833 hours
+            if hours < min_hours:
+                QMessageBox.warning(self, "Interval Too Short", "Fan cleaning interval must be at least 5 minutes (0.08 hours).")
+                return
+            seconds = int(hours * 3600)
+            self.controller.config["cleaner_interval"] = seconds
+            self.controller.save_config()
+            self.update_cleaner_info_text()
+            self.status_label.setText(f"Cleaner interval set to {hours:.2f} hours.")
+        except ValueError:
+            QMessageBox.critical(self, "Invalid Input", "Please enter a valid numeric value for interval hours.")
+
+    def update_cleaner_info_text(self):
+        if not hasattr(self, "cleaner_info_lbl"):
+            return
+        
+        sec = self.controller.config.get("cleaner_interval", 14400)
+        if sec >= 3600:
+            hrs = sec / 3600.0
+            hrs_str = f"{hrs:.1f}".rstrip('0').rstrip('.')
+            interval_str = f"{hrs_str} hour" if hrs_str == "1" else f"{hrs_str} hours"
+        else:
+            mins = int(round(sec / 60.0))
+            interval_str = f"{mins} minute" if mins == 1 else f"{mins} minutes"
+            
+        dur = self.controller.config.get("cleaner_duration", 30)
+        dur_str = f"{dur} second" if dur == 1 else f"{dur} seconds"
+        
+        self.cleaner_info_lbl.setText(
+            f"Cleans dust by spinning fans in reverse direction (CleanCreek technology).\n"
+            f"Runs automatically every {interval_str} for {dur_str} when enabled."
+        )
+
+    def on_cleaner_duration_changed(self):
+        self.update_cleaner_duration_source_label()
+
+    def save_cleaner_duration(self):
+        val = self.cleaner_duration_spin.value()
+        win_dur = self.controller.config.get("windows_cleaner_duration")
+        win_imported = self.controller.config.get("windows_config_imported", False)
+        
+        self.controller.config["cleaner_duration"] = val
+        if win_dur is not None and val == win_dur and win_imported:
+            self.controller.config["cleaner_duration_user_override"] = False
+        else:
+            self.controller.config["cleaner_duration_user_override"] = True
+            
+        self.controller.save_config()
+        self.update_cleaner_duration_source_label()
+        self.update_cleaner_info_text()
+        self.status_label.setText(f"Cleaner duration set to {val}s.")
+
+    def update_cleaner_duration_source_label(self):
+        if not hasattr(self, "cleaner_duration_source_lbl"):
+            return
+        
+        current_val = self.cleaner_duration_spin.value()
+        win_dur = self.controller.config.get("windows_cleaner_duration")
+        win_imported = self.controller.config.get("windows_config_imported", False)
+        user_override = self.controller.config.get("cleaner_duration_user_override", False)
+
+        if win_dur is not None and current_val == win_dur and win_imported:
+            self.cleaner_duration_source_lbl.setText("(Sourced from Windows OMEN Config)")
+            self.cleaner_duration_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold; margin-left: 24px;")
+        elif user_override or (not win_imported and current_val != 30):
+            self.cleaner_duration_source_lbl.setText("(User Specified)")
+            self.cleaner_duration_source_lbl.setStyleSheet("color: #2196f3; font-size: 11px; font-weight: bold; margin-left: 24px;")
+        elif win_imported:
+            self.cleaner_duration_source_lbl.setText("(Sourced from Windows OMEN Config)")
+            self.cleaner_duration_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold; margin-left: 24px;")
+        else:
+            self.cleaner_duration_source_lbl.setText("(Default)")
+            self.cleaner_duration_source_lbl.setStyleSheet("color: #888888; font-size: 11px; font-weight: bold; margin-left: 24px;")
+
+    def start_manual_cleaning(self):
+        import threading
+        def _bg_start():
+            success, msg = self.controller.start_fan_cleaning()
+            if not success:
+                print(f"[GUI] Cannot start cleaner: {msg}")
+        
+        threading.Thread(target=_bg_start, daemon=True).start()
+        self.update_status()
+
+    def auto_stop_manual_cleaning(self):
+        import threading
+        if self.controller.config.get("cleaner_in_progress", False):
+            threading.Thread(target=self.controller.stop_fan_cleaning, daemon=True).start()
+
+    def emergency_stop_cleaning(self):
+        import threading
+        threading.Thread(target=self.controller.emergency_stop_fan_cleaning, daemon=True).start()
+        self.update_status()
+
+    def update_cleaner_status(self):
+        """Refreshes the live fan-direction / elapsed / last-run card on the cleaner page."""
+        import time as _time
+        if not hasattr(self, "cleaner_direction_lbl"):
+            return
+
+        # --- Fan direction ---
+        try:
+            in_reverse = self.controller.is_reverse_mode_active()
+        except Exception:
+            in_reverse = False
+
+        if in_reverse:
+            self.cleaner_direction_lbl.setText("\u25bc Reverse")
+            self.cleaner_direction_lbl.setStyleSheet(
+                "color: #ef5350; font-size: 14px; font-weight: bold; "
+                "background: #3b1a1a; border-radius: 4px; padding: 4px 10px;"
+            )
+        else:
+            self.cleaner_direction_lbl.setText("\u25b2 Forward")
+            self.cleaner_direction_lbl.setStyleSheet(
+                "color: #4caf50; font-size: 14px; font-weight: bold; "
+                "background: #1b3a1e; border-radius: 4px; padding: 4px 10px;"
+            )
+
+        # --- Current attempt elapsed time ---
+        in_progress = self.controller.config.get("cleaner_in_progress", False)
+        start_ts = self.controller.config.get("cleaner_start_time")
+        if in_progress and start_ts is None:
+            self.cleaner_elapsed_lbl.setText("Starting...")
+            self.cleaner_elapsed_lbl.setStyleSheet(
+                "color: #ffb300; font-size: 13px; font-weight: bold;"
+            )
+        elif start_ts is not None:
+            elapsed = int(_time.time() - start_ts)
+            mins, secs = divmod(elapsed, 60)
+            self.cleaner_elapsed_lbl.setText(f"{mins:02d}:{secs:02d}")
+            self.cleaner_elapsed_lbl.setStyleSheet(
+                "color: #ffb300; font-size: 14px; font-weight: bold;"
+            )
+        else:
+            self.cleaner_elapsed_lbl.setText("\u2014")
+            self.cleaner_elapsed_lbl.setStyleSheet(
+                "color: #fff; font-size: 14px; font-weight: bold;"
+            )
+
+        # --- Last run ---
+        last_ts = self.controller.config.get("cleaner_last_run")
+        if last_ts is not None:
+            ago = int(_time.time() - last_ts)
+            if ago < 60:
+                ago_str = f"{ago}s ago"
+            elif ago < 3600:
+                ago_str = f"{ago // 60}m ago"
+            elif ago < 86400:
+                ago_str = f"{ago // 3600}h ago"
+            else:
+                ago_str = f"{ago // 86400}d ago"
+            self.cleaner_lastrun_lbl.setText(ago_str)
+        else:
+            self.cleaner_lastrun_lbl.setText("Never")
+
+        # --- Update Button Enabled States ---
+        in_progress = self.controller.config.get("cleaner_in_progress", False)
+        transitioning = self.controller.config.get("cleaner_transitioning", False)
+        active = in_progress or transitioning
+        
+        if hasattr(self, "manual_clean_btn"):
+            self.manual_clean_btn.setEnabled(not active)
+        if hasattr(self, "emergency_stop_btn"):
+            self.emergency_stop_btn.setEnabled(active)
 
 if __name__ == "__main__":
     import signal

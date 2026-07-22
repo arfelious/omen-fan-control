@@ -1,15 +1,15 @@
 # HP Omen Fan Control (Linux)
 
-This tool provides fan control for HP Omen Max, Victus and Omen laptops on Linux. It includes installer for a kernel driver patch (`hp-wmi`) to expose PWM controls and a userspace utility to manage fan curves, create watchdog that sets the fan configuration periodically and a simple stress test tool to see the fan curve in effect.
+This tool provides fan control for HP Omen Max, Victus and Omen laptops on Linux. It includes installer for a kernel driver patch (`hp-wmi`) to expose PWM controls and a userspace utility to manage fan curves, create watchdog that sets the fan configuration periodically and a simple stress test tool to see the fan curve in effect. It also allows periodically reversing the fan spin direction on supported boards to expel dust.
 
 ## Context
 
-This tool includes a backported `hp-wmi` driver patch from the upcoming Linux 6.20 kernel, which introduces native fan control support for many devices from the following models:
+This tool includes a backported `hp-wmi` driver patch from the latest Linux kernel, which introduces native fan control support for many devices from the following models:
 1.  **HP Omen Max**
 2.  **HP Victus**
 3.  **HP Omen**
 
-The patch can be installed on versions before `6.20`.
+The patch can be installed on versions before `6.20` as well.
 
 **Reference Kernel Commit:**
 [platform/x86: hp-wmi: add manual fan control for Victus S models](https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c)
@@ -17,10 +17,12 @@ The patch can be installed on versions before `6.20`.
 This program also includes a modification that sets the max speed according to calibration if the query to get the Max RPM fails for your device.
 ## Tested Hardware
 
-*   **Model:** HP OMEN MAX 16-AH0001NT (8D41)
-*   **OS:** Arch Linux 6.18, 6.19, 7.0
-*   **Model:** HP OMEN Transcend 16-u1xxx (8C4D)
-*   **OS:** Arch Linux 6.18 LTS, 7.0
+*   **Models:** HP OMEN MAX 16-AH0xxxNT (8D41), HP OMEN Transcend 16-u1xxx (8C4D), OMEN by HP Gaming Laptop 16-xf0xxx (8BCA), HP Victus 16 s1xxx (8C9C)
+*   **OS:** Arch Linux 6.18, 6.19, 7.0, 7.1
+
+> Would you like to add your model here? Create an issue with the "Tested Hardware" label and include these after successfully installing the patch and using the tool:
+> * Your laptop's board id (you can find it in /sys/class/dmi/id/board_name)
+> * Your kernel version (you can find it in /proc/version)
 
 ## Installation
 
@@ -37,7 +39,7 @@ cd omen-fan-control
 **1. System Dependencies**
 You must install kernel headers and build tools for the driver patch to compile.
 *   **Arch:** `pacman -S linux-headers base-devel`
-*   **Debian/Ubuntu:** `apt install linux-headers-$(uname -r) linux-headers-$(uname -r | sed 's/-[^-]*$/-common/') "linux-kbuild-$(uname -r | cut -d. -f1,2,3 | cut -d+ -f1)*" build-essential`
+*   **Debian/Ubuntu/Pop!_OS:** `apt install linux-headers-$(uname -r) linux-headers-$(uname -r | sed 's/-[^-]*$/-common/') "linux-kbuild-$(uname -r | cut -d. -f1,2,3 | cut -d+ -f1)*" build-essential`
 
     > **Note:** Debian and Ubuntu split kernel headers into multiple packages: an arch-specific one (`linux-headers-<version>-amd64`), a common one (`linux-headers-<version>-common`), and a build scripts package (`linux-kbuild-<version>`). All must be installed for the module build to succeed. 
     >
@@ -139,14 +141,35 @@ sudo python3 omen_cli.py fan-control --mode manual --value 100% --no-save
 
 <br>
 
-<br>
 
-**Detailed Information**
+**Detailed Information for Commands**
 
 Commands provide detailed information when `--help` is passed with the command
 ```bash
 python omen_cli.py fan-control --help
 ```
+## Fan Cleaning
+This is currently the only Linux utility capable of recreating the fan cleaning routine. On supported laptops, it reverses fan spin direction to dislodge accumulated dust. The cleaning interval, manual cleanup, and further configuration can be done using the **Fan Cleaner** page. The page is not visible on unsupported hardware to prevent unexpected behavior.
+Fan cleaning feature requires "acpi_call" module to be loaded. You can load it by running `sudo modprobe acpi_call`.
+
+If you don't have the module installed:
+
+#### Ubuntu / Debian / Pop!_OS
+```bash
+sudo apt update
+sudo apt install acpi-call-dkms
+sudo modprobe acpi_call
+```
+
+#### Arch Linux / Manjaro / CachyOS
+```bash
+sudo pacman -S acpi_call-dkms
+sudo modprobe acpi_call
+```
+## Related Projects
+This utility is part of an ongoing effort to bring more **OMEN Gaming Hub** features to Linux, you might also want to check this project out:
+
+[Omen RGB Linux](https://github.com/arfelious/omen-rgb-linux):  Per-key RGB lighting controller with GUI and SDK for OMEN laptops on Linux.
 
 ## Uninstallation
 
@@ -166,7 +189,7 @@ To remove the service and restore the original kernel driver:
 ## Disclaimer
 
 **USE AT YOUR OWN RISK.**
-Modifying kernel drivers and manipulating thermal control systems can potentially damage your hardware or cause instability. This software is provided "as is" without warranty of any kind. This was tested on my personal hardware, and the used `hp-wmi.c` is a patched version of the one in the upcoming `6.20` kernel, so your mileage may vary.
+Modifying kernel drivers and manipulating thermal control systems can potentially damage your hardware or cause instability. This software is provided "as is" without warranty of any kind. This was tested on my personal hardware, and the used `hp-wmi.c` is a patched and modified version of the one in the Linux kernel, so your mileage may vary.
 
 <details>
 <summary>Acknowledgements</summary>

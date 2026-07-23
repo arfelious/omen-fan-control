@@ -347,6 +347,8 @@ def serve():
     last_watchdog_time = time.time()
     hysteresis_start_time = None
     
+    daemon_start_time = time.time()
+
     last_config_mtime = 0
     last_volatile_mtime = 0
     
@@ -401,13 +403,18 @@ def serve():
                 raw_interval = controller.config.get("cleaner_interval", 14400)
                 interval = max(raw_interval, 300) # Enforce 5-minute (300s) minimum limit
                 last_run = controller.config.get("cleaner_last_run", 0)
-                if time.time() - last_run >= interval:
+                
+                # Do not trigger cleanup at start
+                if last_run == 0 or (daemon_start_time - last_run >= interval):
+                    due = (time.time() - daemon_start_time) >= interval
+                else:
+                    due = (time.time() - last_run) >= interval
+
+                if due:
                     if current_temp is not None and current_temp <= 70:
                         click.echo(f"Triggering automatic fan cleaning cycle (interval: {interval}s)...")
                         success, msg = controller.start_fan_cleaning()
                         if success:
-                            controller.config["cleaner_last_run"] = time.time()
-                            controller.save_config()
                             def _auto_stop_cleaner():
                                 time.sleep(30)
                                 if controller.config.get("cleaner_in_progress", False):

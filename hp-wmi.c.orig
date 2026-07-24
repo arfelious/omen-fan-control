@@ -2770,6 +2770,7 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 	priv->min_rpm = 0;
 	priv->gpu_delta = 0;
 	priv->max_rpm = OMEN_MAX_RPM;
+	priv->pwm = 128;
 
 	/*
 	 * Try to get a better max_rpm from hardware before attempting the

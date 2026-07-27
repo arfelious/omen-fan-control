@@ -25,6 +25,10 @@ class WorkerThread(QThread):
         super().__init__()
         self.target = target
         self.args = args
+        self._stop_requested = False
+
+    def request_stop(self) -> None:
+        self._stop_requested = True
 
     def run(self):
         res = self.target(*self.args)
@@ -32,11 +36,15 @@ class WorkerThread(QThread):
         if hasattr(res, 'send'):
             try:
                 while True:
+                    if self._stop_requested:
+                        res.close()
+                        return
                     prog = next(res)
                     if isinstance(prog, int):
                         self.progress.emit(prog)
             except StopIteration as e:
-                self.finished.emit(e.value)
+                if not self._stop_requested:
+                    self.finished.emit(e.value)
         else:
             self.finished.emit(res)
 

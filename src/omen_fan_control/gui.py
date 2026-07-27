@@ -1291,8 +1291,10 @@ class MainWindow(QMainWindow):
     def stop_calibration(self):
         self.cal_running = False
         if hasattr(self, "cal_thread") and self.cal_thread.isRunning():
-            self.cal_thread.terminate()
-            self.cal_thread.wait()
+            self.cal_thread.request_stop()
+            if not self.cal_thread.wait(3000):
+                self.cal_thread.terminate()
+                self.cal_thread.wait()
         
         self.cal_btn.setText("Start Calibration")
         self.cal_btn.setStyleSheet("")

@@ -1,4 +1,9 @@
 dev
 tests
 __pycache__
+**/__pycache__
+*.pyc
+*.egg-info/
+dist/
+build/
 omen_pp_compat.h

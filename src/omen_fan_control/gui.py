@@ -2300,7 +2300,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "emergency_stop_btn"):
             self.emergency_stop_btn.setEnabled(active)
 
-if __name__ == "__main__":
+def main():
     import signal
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     
@@ -2310,7 +2310,7 @@ if __name__ == "__main__":
         if not display:
             print("Error: No DISPLAY environment variable found.")
             print("If you are running via SSH, ensure X11 forwarding is enabled (-X or -Y).")
-            print("If you are running via sudo, try 'sudo -E python3 omen_gui.py' or 'pkexec python3 omen_gui.py'.")
+            print("If you are running via sudo, try 'sudo -E python3 -m omen_fan_control.gui' or 'pkexec python3 -m omen_fan_control.gui'.")
             sys.exit(1)
         
         # Check if we can actually connect to X (prevents obscure segments faults/Qt errors)
@@ -2320,9 +2320,7 @@ if __name__ == "__main__":
             if res.returncode != 0 and os.geteuid() == 0:
                  print(f"Warning: Could not connect to display {display} as root.")
                  print("This is likely a permission issue with Xauthority.")
-                 print("Fix: Use 'pkexec python3 omen_gui.py' or 'sudo -E python3 omen_gui.py'.")
-                 # We don't exit here as xset might not be installed, 
-                 # but we provide the hint.
+                 print("Fix: Use 'pkexec python3 -m omen_fan_control.gui' or 'sudo -E python3 -m omen_fan_control.gui'.")
         except Exception:
             pass
     
@@ -2337,3 +2335,6 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()

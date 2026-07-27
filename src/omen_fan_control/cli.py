@@ -938,8 +938,11 @@ def acknowledgements():
     click.echo("  https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c")
     click.echo("")
 
-if __name__ == '__main__':
+def main():
     if len(sys.argv) == 1:
         cli.main(['--help'])
     else:
         cli()
+
+if __name__ == '__main__':
+    main()

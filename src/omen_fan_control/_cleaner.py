@@ -16,7 +16,7 @@ from ._constants import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from .fan_controller import FanController
 
 
 class FanCleanerMixin:
@@ -211,8 +211,7 @@ class FanCleanerMixin:
             return True
 
         try:
-            val1 = controller.read_sys_file(controller.fan1_input_path) if (controller := self) else None
-            controller = self  # type: FanController
+            controller: FanController = self
             val1 = controller.read_sys_file(controller.fan1_input_path)
             val2 = controller.read_sys_file(controller.fan2_input_path)
             if (val1 and int(val1) >= 12800) or (val2 and int(val2) >= 12800):

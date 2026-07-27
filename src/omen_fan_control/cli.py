@@ -41,7 +41,7 @@ def options(wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpol
     """
     controller = get_controller()
     
-    if all(x is None for x in [wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpolation]):
+    if all(x is None for x in [wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpolation, enable_experimental, thermal_profile]):
         wt = controller.config.get('calibration_wait', 5)
         wd = controller.config.get('watchdog_interval', 90)
         mw = controller.config.get('ma_window', 5)
@@ -395,10 +395,12 @@ def enable_bios():
 @click.option('--ma-window', type=int, required=False, is_flag=False, flag_value=-1, help="Moving Average Window size. No arg shows current.")
 @click.option('--bypass-warning', type=click.Choice(['on', 'off']), required=False, is_flag=False, flag_value='show', help="Bypass driver patch warning. No arg shows current.")
 @click.option('--curve-interpolation', type=click.Choice(['smooth', 'discrete']), required=False, is_flag=False, flag_value='show', help="Curve interpolation mode. No arg shows current.")
+@click.option('--enable-experimental', type=click.Choice(['on', 'off']), required=False, is_flag=False, flag_value='show', help="Enable experimental board support. No arg shows current.")
+@click.option('--thermal-profile', type=click.Choice(['omen', 'victus', 'victus_s']), required=False, is_flag=False, flag_value='show', help="Set thermal profile for exp. support. No arg shows current.")
 @click.pass_context
-def settings(ctx, wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpolation):
+def settings(ctx, wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpolation, enable_experimental, thermal_profile):
     """Alias for options"""
-    ctx.invoke(options, wait_time=wait_time, watchdog=watchdog, ma_window=ma_window, bypass_patch_warning=bypass_patch_warning, curve_interpolation=curve_interpolation)
+    ctx.invoke(options, wait_time=wait_time, watchdog=watchdog, ma_window=ma_window, bypass_patch_warning=bypass_patch_warning, curve_interpolation=curve_interpolation, enable_experimental=enable_experimental, thermal_profile=thermal_profile)
 
 @cli.command()
 def license():

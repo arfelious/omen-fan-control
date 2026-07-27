@@ -68,6 +68,7 @@ class FanController(
             self.pwm1_enable_path = None
             self.pwm1_path = None
             self.fan1_input_path = None
+            self.fan2_input_path = None
             return
 
         self.hwmon_path = Path(paths[0])

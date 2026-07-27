@@ -45,7 +45,7 @@ def cli(ctx, config, help_extra):
     if os.geteuid() != 0 and not controller.config.get("bypass_root_warning", False):
         click.echo(click.style("WARNING: Running without root privileges.", fg="yellow"))
         click.echo(click.style("Most commands require root to function correctly.", fg="yellow"))
-        click.echo(click.style("Use --bypass-root-warning in 'omen_cli.py options' config to hide this.", dim=True))
+        click.echo(click.style("Use --bypass-root-warning in 'omen-fan-control options' config to hide this.", dim=True))
         click.echo("", err=True)
 
     # Board support check
@@ -130,7 +130,7 @@ def install_patch(install_type, temp, perm, restore):
         
     if not mode:
         click.echo("Please specify installation type: t (temp, temporary), p (perm, permanent), or r (restore).")
-        click.echo("Example: omen_cli.py install-patch temporary")
+        click.echo("Example: omen-fan-control install-patch temporary")
         return
 
     if mode == 'temp':
@@ -203,7 +203,7 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
     if service_active and controller.config_path.resolve() != default_conf.resolve() and not no_save:
         click.echo(click.style("WARNING: Background service is active using system config.", fg="yellow"))
         click.echo(click.style(f"It will likely overwrite your changes from {controller.config_path.name} immediately.", fg="yellow"))
-        click.echo("Suggestion: Stop the service ('omen_cli.py service stop') before testing custom configs.\n")
+        click.echo("Suggestion: Stop the service ('omen-fan-control service stop') before testing custom configs.\n")
 
     if mode == 'last':
         mode = controller.config.get("mode", "auto")
@@ -234,7 +234,7 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
         has_driver = controller.pwm1_path and controller.pwm1_path.exists()
         if not has_driver:
             click.echo(f"Error: Manual mode requires the kernel driver patch (pwm1 not found).")
-            click.echo("Run 'omen_cli.py install-patch perm' to install it.")
+            click.echo("Run 'omen-fan-control install-patch perm' to install it.")
             sys.exit(1)
 
         if value is None:
@@ -271,7 +271,7 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
         has_driver = controller.pwm1_path and controller.pwm1_path.exists()
         if not has_driver:
             click.echo(f"Error: Curve mode requires the kernel driver patch (pwm1 not found).")
-            click.echo("Run 'omen_cli.py install-patch perm' to install it.")
+            click.echo("Run 'omen-fan-control install-patch perm' to install it.")
             sys.exit(1)
 
         if curve_csv:
@@ -312,9 +312,9 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
         
         if not controller.is_service_installed() and not no_save:
              click.echo("WARNING: Background service is NOT installed/running. Curve mode requires the service to be active.")
-             click.echo("Run 'omen_cli.py install-patch perm' (if needed) and ensure service is started.")
+             click.echo("Run 'omen-fan-control install-patch perm' (if needed) and ensure service is started.")
              click.echo("   sudo systemctl start omen-fan-control.service")
-             click.echo("Or run 'omen_cli.py serve' manually to keep it running.")
+             click.echo("Or run 'omen-fan-control serve' manually to keep it running.")
         else:
              if no_save:
                  click.echo("Service should pick up the temporary change automatically.")
@@ -668,7 +668,7 @@ def cleaner_start(background):
     click.echo("Fan cleaning started successfully!")
 
     if background:
-        click.echo("Running in background. Use 'omen_cli.py cleaner status' to monitor progress.")
+        click.echo("Running in background. Use 'omen-fan-control cleaner status' to monitor progress.")
         return
 
     dur = controller.config.get("cleaner_duration", 30)

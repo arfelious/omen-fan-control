@@ -7,3 +7,6 @@ __pycache__
 dist/
 build/
 omen_pp_compat.h
+*.pkg.tar.zst
+arch/**/pkg/
+arch/**/src/

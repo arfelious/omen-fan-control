@@ -57,6 +57,7 @@ check-env:
 .PHONY: omen_pp_compat.h
 omen_pp_compat.h:
 	@PP_HDR=$$(find $(KERNEL_BUILD) /usr/src/linux-headers-* /usr/src/kernels/* \
+		/usr/src/linux-*-headers-* \
 		-name platform_profile.h -path "*/linux/platform_profile.h" \
 		2>/dev/null | head -1); \
 	if [ -z "$$PP_HDR" ]; then \

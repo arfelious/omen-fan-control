@@ -40,6 +40,15 @@
 #include "omen_pp_compat.h"
 
 /*
+ * ACPI_AC_CLASS is not exported by the kernel headers shipped with current
+ * Debian/Ubuntu HWE kernels; the upstream in-tree hp-wmi.c carries a local
+ * definition for the same reason. Guarded so kernels that do provide it win.
+ */
+#ifndef ACPI_AC_CLASS
+#define ACPI_AC_CLASS "ac_adapter"
+#endif
+
+/*
  * Platform profile API compatibility shim.
  *
  * The API was redesigned in kernel 6.14; this driver targets the new form.

@@ -37,6 +37,8 @@ package() {
 
   local driver="$srcdir/src/omen_fan_control/data/driver"
   install -Dm644 "$driver/dkms.conf" "$pkgdir/usr/share/omen-fan-control/driver/dkms.conf"
+  install -dm755 "$pkgdir/usr/share/omen-fan-control/driver/src"
+  install -m644 "$driver/src/Makefile" "$pkgdir/usr/share/omen-fan-control/driver/src/Makefile"
   cp -dr --no-preserve=ownership "$driver/hp-wmi-omen" "$pkgdir/usr/share/omen-fan-control/driver/"
   install -Dm755 "$driver/install_driver.sh" "$pkgdir/usr/share/omen-fan-control/driver/install_driver.sh"
   install -dm755 "$pkgdir/usr/share/omen-fan-control/driver/hooks"

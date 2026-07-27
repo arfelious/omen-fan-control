@@ -22,8 +22,9 @@ sha256sums=("SKIP" "SKIP" "SKIP" "SKIP")
 
 package() {
   local dkms_dir="/usr/src/hp-wmi-omen-1.0"
-  install -Dm644 hp-wmi.c      "${pkgdir}${dkms_dir}/hp-wmi.c"
-  install -Dm644 hp-wmi.c.orig "${pkgdir}${dkms_dir}/hp-wmi.c.orig"
-  install -Dm644 Makefile      "${pkgdir}${dkms_dir}/Makefile"
   install -Dm644 dkms.conf     "${pkgdir}${dkms_dir}/dkms.conf"
+  install -dm755 "${pkgdir}${dkms_dir}/src/hp-wmi-omen"
+  install -m644 hp-wmi.c      "${pkgdir}${dkms_dir}/src/hp-wmi-omen/hp-wmi.c"
+  install -m644 hp-wmi.c.orig "${pkgdir}${dkms_dir}/src/hp-wmi-omen/hp-wmi.c.orig"
+  install -m644 Makefile      "${pkgdir}${dkms_dir}/src/hp-wmi-omen/Makefile"
 }

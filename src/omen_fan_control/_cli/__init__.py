@@ -86,5 +86,19 @@ def main() -> None:
         cli()
 
 
+# Register extracted subcommands into the cli group
+
+from .calibrate import calibrate  # noqa: E402
+from .fan_control import fan_control  # noqa: E402
+from .install_patch import install_patch  # noqa: E402
+from .serve import serve  # noqa: E402
+from .stress import stress  # noqa: E402
+
+cli.add_command(calibrate)
+cli.add_command(fan_control)
+cli.add_command(install_patch)
+cli.add_command(serve)
+cli.add_command(stress)
+
 if __name__ == "__main__":
     main()

@@ -1,7 +1,7 @@
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
+from PyQt6.QtWidgets import QWidget, QApplication
 from PyQt6.QtCore import Qt, pyqtSignal, QPointF
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QLinearGradient
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QLinearGradient
 import sys
 
 class FanCurveEditor(QWidget):

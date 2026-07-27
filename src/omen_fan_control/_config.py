@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from ._constants import (
-    CONFIG_DIR,
     CONFIG_FILE,
     CONFIG_VERSION,
     DEFAULT_CALIBRATION_WAIT,
@@ -33,6 +32,7 @@ class ConfigDict(TypedDict, total=False):
     shutdown_hook_enabled: bool
     reference_sensor: str
     log_level: str
+    cleaner_enabled: bool
     cleaner_in_progress: bool
     cleaner_start_time: float | None
     cleaner_transitioning: bool

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from ._constants import OMEN_FAN_DIR
 
 if TYPE_CHECKING:
-    from .fan_controller import FanController
+    pass
 
 
 class DriverInstallerMixin:

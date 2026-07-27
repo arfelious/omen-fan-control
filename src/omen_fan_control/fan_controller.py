@@ -335,7 +335,7 @@ class FanController(
         self.stop_stress_test()
 
         self.stress_processes = []
-        cmd = [Path(sys.executable).name, "-c", "while True: 9999**9999"]
+        cmd = [sys.executable, "-c", "while True: 9999**9999"]
 
         print(f"Starting stress test on {core_count} cores...")
         try:

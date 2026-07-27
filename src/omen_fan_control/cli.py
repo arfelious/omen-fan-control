@@ -330,7 +330,8 @@ def serve():
     """Run the fan control daemon (foreground). Used by systemd service."""
     import time
     from . import OMEN_FAN_DIR
-    from .logic import FanController, VOLATILE_CONFIG_FILE
+    from ._constants import VOLATILE_CONFIG_FILE
+    from .logic import FanController
     controller = get_controller()
     click.echo("Starting Omen Fan Control Daemon...")
     

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from ._constants import OMEN_FAN_DIR, VOLATILE_CONFIG_FILE
 
 if TYPE_CHECKING:
-    from .fan_controller import FanController
+    pass
 
 
 class ServiceManagerMixin:
@@ -33,10 +33,8 @@ WantedBy=multi-user.target
         service_path = Path("/etc/systemd/system/omen-fan-control.service")
 
         try:
-            with open("omen-fan-control.service", "w") as f:
-                f.write(service_content)
-
-            subprocess.run(["mv", "omen-fan-control.service", str(service_path)], check=True)
+            service_path.parent.mkdir(parents=True, exist_ok=True)
+            service_path.write_text(service_content)
             subprocess.run(["systemctl", "daemon-reload"], check=True)
             subprocess.run(["systemctl", "enable", "omen-fan-control.service"], check=True)
             subprocess.run(["systemctl", "start", "omen-fan-control.service"], check=True)
@@ -109,10 +107,8 @@ WantedBy=multi-user.target
         service_path = Path("/etc/systemd/system/omen-fan-shutdown.service")
 
         try:
-            with open("omen-fan-shutdown.service", "w") as f:
-                f.write(service_content)
-
-            subprocess.run(["mv", "omen-fan-shutdown.service", str(service_path)], check=True)
+            service_path.parent.mkdir(parents=True, exist_ok=True)
+            service_path.write_text(service_content)
             subprocess.run(["systemctl", "daemon-reload"], check=True)
             subprocess.run(["systemctl", "enable", "omen-fan-shutdown.service"], check=True)
             subprocess.run(["systemctl", "start", "omen-fan-shutdown.service"], check=True)

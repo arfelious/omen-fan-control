@@ -20,7 +20,8 @@ import click
 import sys
 import time
 import threading
-from omen_logic import FanController, OMEN_FAN_DIR
+from . import OMEN_FAN_DIR, get_data_dir
+from .logic import FanController
 
 @click.group()
 @click.option('--config', type=click.Path(), help="Path to custom config file")
@@ -328,7 +329,8 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
 def serve():
     """Run the fan control daemon (foreground). Used by systemd service."""
     import time
-    from omen_logic import FanController, OMEN_FAN_DIR, VOLATILE_CONFIG_FILE
+    from . import OMEN_FAN_DIR
+    from .logic import FanController, VOLATILE_CONFIG_FILE
     controller = get_controller()
     click.echo("Starting Omen Fan Control Daemon...")
     
@@ -910,11 +912,11 @@ def settings(ctx, wait_time, watchdog, ma_window, bypass_patch_warning, curve_in
 def license():
     """Show license"""
     try:
-        with open(OMEN_FAN_DIR / "LICENSE.md", "r") as f:
+        with open(get_data_dir() / "LICENSE.md", "r") as f:
             content = f.read()
         click.echo(content)
     except Exception as e:
-        click.echo("This program is MIT Licensed.")
+        click.echo("This program is GPLv3 Licensed.")
         click.echo("You should have received a copy of the full license text with this program.")
         click.echo(f"\n(Error loading LICENSE.md: {e})")
 

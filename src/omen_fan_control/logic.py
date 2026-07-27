@@ -50,7 +50,7 @@ VOLATILE_CONFIG_FILE = VOLATILE_CONFIG_DIR / "config.json"
 
 DEFAULT_CALIBRATION_WAIT = 30
 DEFAULT_WATCHDOG_INTERVAL = 90
-OMEN_FAN_DIR = Path(__file__).parent.absolute()
+OMEN_FAN_DIR = Path(__file__).parent.absolute() / "data" / "driver"
 CONFIG_VERSION = 1
 
 # Supported Board IDs
@@ -796,7 +796,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart={sys.executable} {str(OMEN_FAN_DIR / 'omen_cli.py')} serve
+        ExecStart={sys.executable} -m omen_fan_control.cli serve
 WorkingDirectory={str(OMEN_FAN_DIR)}
 Restart=on-failure
 StartLimitBurst=5
@@ -886,7 +886,7 @@ Before=shutdown.target reboot.target halt.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/true
-ExecStop={sys.executable} {str(OMEN_FAN_DIR / 'omen_cli.py')} fan-control --mode manual --value 30% --no-save --source shutdown-hook
+ExecStop={sys.executable} -m omen_fan_control.cli fan-control --mode manual --value 30% --no-save --source shutdown-hook
 RemainAfterExit=yes
 
 [Install]

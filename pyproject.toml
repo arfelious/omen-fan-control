@@ -35,6 +35,12 @@ packages = ["src/omen_fan_control"]
 [tool.hatch.build.targets.sdist]
 include = ["/src", "/README.md", "/LICENSE.md"]
 
+[dependency-groups]
+dev = [
+    "ruff>=0.1",
+    "build>=1.0",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

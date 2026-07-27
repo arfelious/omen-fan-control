@@ -9,20 +9,28 @@ license=("GPL")
 arch=("x86_64")
 depends=("dkms" "linux-headers")
 provides=("hp-wmi-omen")
+install="${pkgname}.install"
 
-source=(
-  "../../src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c"
-  "../../src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c.orig"
-  "../../src/omen_fan_control/data/driver/hp-wmi-omen/Makefile"
-  "../../src/omen_fan_control/data/driver/dkms.conf"
-)
-sha256sums=("SKIP" "SKIP" "SKIP" "SKIP")
+source=("PKGBUILD")
+sha256sums=("SKIP")
+
+prepare() {
+  local reporoot
+  if [[ -f "$startdir/pyproject.toml" ]]; then
+    reporoot="$startdir"
+  else
+    reporoot="$startdir/../.."
+  fi
+  cp "$reporoot/src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c" "$srcdir/"
+  cp "$reporoot/src/omen_fan_control/data/driver/hp-wmi-omen/Makefile" "$srcdir/"
+  cp "$reporoot/src/omen_fan_control/data/driver/dkms.conf" "$srcdir/"
+}
 
 package() {
   local dkms_dir="/usr/src/${_pkgbase}-${pkgver}"
   install -Dm644 dkms.conf "${pkgdir}${dkms_dir}/dkms.conf"
+  sed -e 's/@PKGNAME@/hp-wmi-omen/g' -e 's/@PKGVER@/1.0/g' -i "${pkgdir}${dkms_dir}/dkms.conf"
   install -dm755 "${pkgdir}${dkms_dir}/src/hp-wmi-omen"
   install -m644 hp-wmi.c "${pkgdir}${dkms_dir}/src/hp-wmi-omen/hp-wmi.c"
-  install -m644 hp-wmi.c.orig "${pkgdir}${dkms_dir}/src/hp-wmi-omen/hp-wmi.c.orig"
   install -m644 Makefile "${pkgdir}${dkms_dir}/src/hp-wmi-omen/Makefile"
 }

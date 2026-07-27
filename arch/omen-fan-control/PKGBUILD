@@ -23,6 +23,7 @@ prepare() {
   cp -f "$reporoot/pyproject.toml" "$srcdir/"
   cp -f "$reporoot/README.md" "$srcdir/" 2>/dev/null || true
   cp -r "$reporoot/src" "$srcdir/"
+  cp "$reporoot/src/omen_fan_control/data/omen-fan-control.service" "$srcdir/"
 }
 
 build() {
@@ -39,12 +40,18 @@ package() {
   install -Dm644 "$driver/dkms.conf" "$pkgdir/usr/share/omen-fan-control/driver/dkms.conf"
   install -dm755 "$pkgdir/usr/share/omen-fan-control/driver/src"
   install -m644 "$driver/src/Makefile" "$pkgdir/usr/share/omen-fan-control/driver/src/Makefile"
-  cp -dr --no-preserve=ownership "$driver/hp-wmi-omen" "$pkgdir/usr/share/omen-fan-control/driver/"
+  mkdir -p "$pkgdir/usr/share/omen-fan-control/driver/hp-wmi-omen"
+  install -m644 "$driver/hp-wmi-omen/hp-wmi.c"   "$pkgdir/usr/share/omen-fan-control/driver/hp-wmi-omen/hp-wmi.c"
+  install -m644 "$driver/hp-wmi-omen/Makefile"    "$pkgdir/usr/share/omen-fan-control/driver/hp-wmi-omen/Makefile"
   install -Dm755 "$driver/install_driver.sh" "$pkgdir/usr/share/omen-fan-control/driver/install_driver.sh"
   install -dm755 "$pkgdir/usr/share/omen-fan-control/driver/hooks"
   for f in "$driver/hooks/"*; do
     [[ -f "$f" ]] && install -Dm644 "$f" "$pkgdir/usr/share/omen-fan-control/driver/hooks/$(basename "$f")"
   done
+
+  install -dm755 "$pkgdir/usr/lib/systemd/system"
+  sed 's|@EXECSTART@|/usr/bin/omen-fan-control serve|g' "$srcdir/omen-fan-control.service" > "$pkgdir/usr/lib/systemd/system/omen-fan-control.service"
+  chmod 644 "$pkgdir/usr/lib/systemd/system/omen-fan-control.service"
 
   install -dm755 "$pkgdir/etc/profile.d"
   printf '%s\n' 'export OMEN_FAN_CONTROL_DIR=/usr/share/omen-fan-control' > "$pkgdir/etc/profile.d/omen-fan-control.sh"

@@ -14,18 +14,18 @@ echo "Pulling $IMAGE ..."
 docker pull "$IMAGE"
 
 echo "Building .deb in container ..."
-docker run --rm --network=host \
+docker run --rm \
     -v "$REPO_ROOT:/src:rw" \
     -w /src \
     "$IMAGE" \
-    bash -ex -c '
-        apt-get update
-        apt-get install -y \
+    bash -exc '
+        apt-get update -qq
+        apt-get install -y -qq \
             debhelper dpkg-dev \
             dkms \
-            python3 python3-pip python3-venv python3-build python3-installer python3-hatchling
+            python3 python3-venv python3-build python3-installer python3-hatchling
         ./deb/build.sh "'"$TARGET"'"
     '
 
 echo "Built packages in deb/build/:"
-ls -la "$REPO_ROOT/deb/build/"*.deb 2>/dev/null || true
+ls -la "$REPO_ROOT/deb/build/"*.deb 2>/dev/null || echo "(no .deb files found in deb/build/)"

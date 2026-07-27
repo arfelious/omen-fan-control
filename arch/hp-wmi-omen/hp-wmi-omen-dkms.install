@@ -1,0 +1,15 @@
+post_install() {
+  dkms add -m hp-wmi-omen -v 1.0 2>/dev/null || true
+  dkms build -m hp-wmi-omen -v 1.0 2>/dev/null || true
+  dkms install -m hp-wmi-omen -v 1.0 2>/dev/null || true
+}
+
+post_upgrade() {
+  dkms add -m hp-wmi-omen -v 1.0 2>/dev/null || true
+  dkms build -m hp-wmi-omen -v 1.0 2>/dev/null || true
+  dkms install -m hp-wmi-omen -v 1.0 2>/dev/null || true
+}
+
+pre_remove() {
+  dkms remove -m hp-wmi-omen -v 1.0 --all 2>/dev/null || true
+}

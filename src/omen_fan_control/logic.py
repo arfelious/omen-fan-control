@@ -30,7 +30,6 @@ import struct
 
 from ._constants import (
     HWMON_PATH_PATTERN,
-    THERMAL_ZONE_PATH,
     LOG_LEVELS,
     CONFIG_DIR,
     CONFIG_FILE,
@@ -43,6 +42,7 @@ from ._constants import (
     SUPPORTED_BOARDS,
     POSSIBLY_SUPPPORTED_OMEN_BOARDS,
 )
+from ._config import ConfigDict, load_config as _load_config, save_config as _save_config
 
 class FanController:
     def __init__(self, config_path=None):
@@ -66,9 +66,9 @@ class FanController:
         Returns (status, board_name)
         status: "SUPPORTED", "POSSIBLY_SUPPORTED", "UNSUPPORTED"
         """
-        # Return cached if available
-        if self.config.get("cached_board_name"):
-            board_name = self.config["cached_board_name"]
+        cached = self.config.get("cached_board_name")
+        if cached:
+            board_name = str(cached)
         else:
             try:
                 with open("/sys/class/dmi/id/board_name", "r") as f:
@@ -132,79 +132,11 @@ class FanController:
         return None
 
 
-    def load_config(self):
-        """Loads configuration from JSON files. Merges based on last modified date."""
-        defaults = {
-            "version": CONFIG_VERSION,
-            "fan_max": 0,
-            "calibration_wait": DEFAULT_CALIBRATION_WAIT,
-            "watchdog_interval": DEFAULT_WATCHDOG_INTERVAL,
-            "ma_window": 5,
-            "curve": [],
-            "bypass_patch_warning": False,
-            "mode": "auto",
-            "manual_pwm": 0,
-            "curve_interpolation": "smooth",
-            "bypass_root_warning": False,
-            "enable_experimental": False,
-            "thermal_profile": "omen",
-            "cached_board_name": None,
-            "debug_experimental_ui": False,
-            "shutdown_hook_enabled": False,
-            "reference_sensor": "cpu"
-        }
-        
-        config = defaults.copy()
-        
-        p_data = {}
-        p_time = 0
-        if self.config_path.exists():
-            try:
-                p_time = self.config_path.stat().st_mtime
-                with open(self.config_path, "r") as f:
-                    p_data = json.load(f)
-            except Exception as e:
-                print(f"Error loading persistent config: {e}")
-
-        v_data = {}
-        v_time = 0
-        if VOLATILE_CONFIG_FILE.exists():
-            try:
-                v_time = VOLATILE_CONFIG_FILE.stat().st_mtime
-                with open(VOLATILE_CONFIG_FILE, "r") as f:
-                    v_data = json.load(f)
-            except Exception as e:
-                print(f"Error loading volatile config: {e}")
-
-        # Apply older config first, then newer config second (so it overrides)
-        if p_time <= v_time:
-            config.update(p_data)
-            config.update(v_data)
-        else:
-            config.update(v_data)
-            config.update(p_data)
-                
-        return config
+    def load_config(self) -> ConfigDict:
+        return _load_config(self.config_path)
 
     def save_config(self, volatile=False, source=None):
-        """Saves current configuration to JSON file. Use volatile=True for /run."""
-        target_path = VOLATILE_CONFIG_FILE if volatile else self.config_path
-        
-        if target_path.parent:
-             target_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        self.config["version"] = CONFIG_VERSION
-        if source:
-            self.config["config_source"] = source
-            
-        with open(target_path, "w") as f:
-            json.dump(self.config, f, indent=4)
-            f.flush()
-            try:
-                import os
-                os.fsync(f.fileno())
-            except:
-                pass
+        _save_config(self.config, self.config_path, volatile=volatile, source=source)
 
     def write_sys_file(self, path, value):
         """Helper to write to sysfs files."""

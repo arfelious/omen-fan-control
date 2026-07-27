@@ -20,8 +20,8 @@ override_dh_auto_clean:
 
 override_dh_auto_install:
 	install -d "$(PKG_DIR)/$(DKMS_REL)"
-	install -m644 ../../src/omen_fan_control/data/driver/dkms.conf "$(PKG_DIR)/$(DKMS_REL)/dkms.conf"
+	install -m644 dkms.conf "$(PKG_DIR)/$(DKMS_REL)/dkms.conf"
 	sed -e 's/@PKGNAME@/hp-wmi-omen/g' -e 's/@PKGVER@/1.0/g' -i "$(PKG_DIR)/$(DKMS_REL)/dkms.conf"
 	install -d "$(PKG_DIR)/$(DKMS_REL)/src"
-	install -m644 ../../src/omen_fan_control/data/driver/src/Makefile "$(PKG_DIR)/$(DKMS_REL)/src/Makefile"
-	cp -r ../../src/omen_fan_control/data/driver/hp-wmi-omen "$(PKG_DIR)/$(DKMS_REL)/src/"
+	install -m644 src/Makefile "$(PKG_DIR)/$(DKMS_REL)/src/Makefile"
+	cp -r src/hp-wmi-omen "$(PKG_DIR)/$(DKMS_REL)/src/"

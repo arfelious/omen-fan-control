@@ -22,6 +22,10 @@ build_omen_fan_control_dkms() {
     echo "=== Building omen-fan-control-dkms (metapackage with DKMS auto-setup) ==="
     rm -rf "$BUILD_DIR/omen-fan-control-dkms"
     mkdir -p "$BUILD_DIR/omen-fan-control-dkms"
+    cp "$DRIVER_SRC/dkms.conf" "$BUILD_DIR/omen-fan-control-dkms/"
+    mkdir -p "$BUILD_DIR/omen-fan-control-dkms/src"
+    cp "$DRIVER_SRC/src/Makefile" "$BUILD_DIR/omen-fan-control-dkms/src/"
+    cp -r "$DRIVER_SRC/hp-wmi-omen" "$BUILD_DIR/omen-fan-control-dkms/src/"
     cp -r "$REPO_ROOT/deb/omen-fan-control-dkms/debian" "$BUILD_DIR/omen-fan-control-dkms/"
     (cd "$BUILD_DIR/omen-fan-control-dkms" && dpkg-buildpackage -b -uc -us)
     echo "Built: $BUILD_DIR/omen-fan-control-dkms_1.0.0_*.deb"

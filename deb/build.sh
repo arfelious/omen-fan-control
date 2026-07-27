@@ -18,6 +18,15 @@ build_hp_wmi_omen_dkms() {
     echo "Built: $BUILD_DIR/hp-wmi-omen-dkms_1.0_*.deb"
 }
 
+build_omen_fan_control_dkms() {
+    echo "=== Building omen-fan-control-dkms (metapackage with DKMS auto-setup) ==="
+    rm -rf "$BUILD_DIR/omen-fan-control-dkms"
+    mkdir -p "$BUILD_DIR/omen-fan-control-dkms"
+    cp -r "$REPO_ROOT/deb/omen-fan-control-dkms/debian" "$BUILD_DIR/omen-fan-control-dkms/"
+    (cd "$BUILD_DIR/omen-fan-control-dkms" && dpkg-buildpackage -b -uc -us)
+    echo "Built: $BUILD_DIR/omen-fan-control-dkms_1.0.0_*.deb"
+}
+
 build_omen_fan_control() {
     echo "=== Building omen-fan-control ==="
     rm -rf "$BUILD_DIR/omen-fan-control"
@@ -37,12 +46,14 @@ main() {
     case "$target" in
         hp-wmi-omen-dkms) build_hp_wmi_omen_dkms ;;
         omen-fan-control) build_omen_fan_control ;;
+        omen-fan-control-dkms) build_omen_fan_control_dkms ;;
         all)
             build_hp_wmi_omen_dkms
             build_omen_fan_control
+            build_omen_fan_control_dkms
             ;;
         *)
-            echo "Usage: $0 [hp-wmi-omen-dkms|omen-fan-control|all]" >&2
+            echo "Usage: $0 [hp-wmi-omen-dkms|omen-fan-control|omen-fan-control-dkms|all]" >&2
             exit 1
             ;;
     esac

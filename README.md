@@ -54,15 +54,27 @@ sudo omen-fan-control-gui
 
 ### Option B: Arch Linux (PKGBUILD)
 
-Build and install from `arch/`:
+Build from `arch/`. Two variants are available:
+
+* **`omen-fan-control`** (base) – the app only. Driver sources are bundled so
+  `install-patch permanent` still works, but DKMS is **not** auto-setup.
+  Suitable for kernels >= 6.20 or if you manage DKMS separately.
+* **`omen-fan-control-dkms`** (recommended) – depends on `omen-fan-control`
+  and places the driver into `/usr/src/hp-wmi-omen-1.0/` so DKMS builds it
+  automatically on install and on every kernel update.
 
 ```bash
-# Python application (CLI + GUI)
+# Base (app only, no DKMS auto-setup)
 cd omen-fan-control/arch/omen-fan-control
 makepkg -sf
 sudo pacman -U omen-fan-control-*.pkg.tar.zst
 
-# Optional: DKMS kernel module (persists across kernel updates)
+# Or: DKMS variant (app + auto DKMS)
+cd omen-fan-control/arch/omen-fan-control-dkms
+makepkg -sf
+sudo pacman -U omen-fan-control-dkms-*.pkg.tar.zst
+
+# Standalone DKMS-only module (optional)
 cd omen-fan-control/arch/hp-wmi-omen
 makepkg -sf
 sudo pacman -U hp-wmi-omen-dkms-*.pkg.tar.zst
@@ -72,17 +84,23 @@ Driver data is installed under `/usr/share/omen-fan-control`; the app uses it wh
 
 ### Option C: Debian / Ubuntu (deb)
 
-Build from `deb/`:
+Build from `deb/`. Two variants are available:
+
+* **`omen-fan-control`** (base) – the app only with bundled driver sources.
+* **`omen-fan-control-dkms`** (recommended) – depends on `omen-fan-control`
+  and places the driver into `/usr/src/hp-wmi-omen-1.0/` with a postinst
+  hook that runs `dkms add / build / install`.
 
 ```bash
 # Build all packages
 cd omen-fan-control/deb
 ./build.sh all
 
-# Install
+# Base install (app only)
 sudo dpkg -i build/omen-fan-control_*.deb
-# Optional: DKMS module
-sudo dpkg -i build/hp-wmi-omen-dkms_*.deb
+
+# Or: DKMS variant (app + auto DKMS)
+sudo dpkg -i build/omen-fan-control-dkms_*.deb
 ```
 
 ### Option D: Clone and run from source

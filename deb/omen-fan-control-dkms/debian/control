@@ -1,0 +1,22 @@
+Source: omen-fan-control-dkms
+Section: kernel
+Priority: optional
+Maintainer: Arfelious <https://github.com/arfelious>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/arfelious/omen-fan-control
+
+Package: omen-fan-control-dkms
+Architecture: all
+Depends: ${misc:Depends},
+         omen-fan-control (= ${source:Upstream-Version}),
+         dkms
+Description: HP Omen/Victus fan control with DKMS auto-setup (metapackage)
+ Metapackage that installs omen-fan-control together with the
+ hp-wmi-omen DKMS kernel module.  The patched driver is placed in
+ /usr/src/hp-wmi-omen-1.0 so DKMS builds it automatically on
+ install and on every kernel upgrade.
+ .
+ For kernels >= 6.20 that include the driver upstream, install
+ omen-fan-control alone instead.

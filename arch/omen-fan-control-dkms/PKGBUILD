@@ -1,0 +1,29 @@
+# Metapackage: omen-fan-control + auto DKMS setup for the patched hp-wmi module.
+# Driver sources are placed in /usr/src/hp-wmi-omen-1.0/ so DKMS auto-builds
+# on install and on every kernel update.  The app itself (CLI/GUI) is pulled
+# in via the omen-fan-control dependency.
+pkgname=omen-fan-control-dkms
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="HP Omen/Victus fan control (CLI+GUI) with DKMS auto-setup for the patched hp-wmi driver"
+url="https://github.com/arfelious/omen-fan-control"
+license=("GPL-3.0-or-later")
+arch=("any")
+depends=("omen-fan-control" "dkms" "linux-headers")
+install="${pkgname}.install"
+
+source=(
+  "../../src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c"
+  "../../src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c.orig"
+  "../../src/omen_fan_control/data/driver/hp-wmi-omen/Makefile"
+  "../../src/omen_fan_control/data/driver/dkms.conf"
+)
+sha256sums=("SKIP" "SKIP" "SKIP" "SKIP")
+
+package() {
+  local dkms_dir="/usr/src/hp-wmi-omen-1.0"
+  install -Dm644 hp-wmi.c      "${pkgdir}${dkms_dir}/hp-wmi.c"
+  install -Dm644 hp-wmi.c.orig "${pkgdir}${dkms_dir}/hp-wmi.c.orig"
+  install -Dm644 Makefile      "${pkgdir}${dkms_dir}/Makefile"
+  install -Dm644 dkms.conf     "${pkgdir}${dkms_dir}/dkms.conf"
+}

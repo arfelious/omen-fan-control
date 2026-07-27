@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
 class DriverInstallerMixin:
     def _patch_driver_source(self, fan_max: int) -> tuple[bool, str]:
-        orig_file = OMEN_FAN_DIR / "hp-wmi.c.orig"
-        target_file = OMEN_FAN_DIR / "hp-wmi.c"
+        orig_file = OMEN_FAN_DIR / "hp-wmi-omen" / "hp-wmi.c.orig"
+        target_file = OMEN_FAN_DIR / "hp-wmi-omen" / "hp-wmi.c"
 
         if not orig_file.exists():
             if target_file.exists():
@@ -140,11 +140,11 @@ class DriverInstallerMixin:
             return False, msg
 
         try:
-            subprocess.run(["make"], check=True, cwd=OMEN_FAN_DIR, capture_output=True, text=True)
+            subprocess.run(["make"], check=True, cwd=OMEN_FAN_DIR / "hp-wmi-omen", capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
             return False, self._format_make_error(e.stderr)
 
-        ko_files = list(OMEN_FAN_DIR.glob("*.ko"))
+        ko_files = list((OMEN_FAN_DIR / "hp-wmi-omen").glob("*.ko"))
         if not ko_files:
             return False, "Error: No .ko file found after make."
 
@@ -165,7 +165,7 @@ class DriverInstallerMixin:
             subprocess.run(["modprobe", "hp-wmi"], check=False)
             return False, f"Insmod failed: {e.stderr}\n(Original driver re-loaded attempts)"
 
-        subprocess.run(["make", "clean"], cwd=OMEN_FAN_DIR, check=False, capture_output=True)
+        subprocess.run(["make", "clean"], cwd=OMEN_FAN_DIR / "hp-wmi-omen", check=False, capture_output=True)
 
         controller.config["install_type"] = "temporary"
         controller.save_config()

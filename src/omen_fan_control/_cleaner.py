@@ -375,17 +375,6 @@ class FanCleanerMixin:
         mode = controller.config.get("cleaner_mode", "modern")
         orig_mode = controller.config.get("cleaner_orig_mode", "auto")
 
-        controller.config["cleaner_in_progress"] = False
-        controller.config["cleaner_transitioning"] = False
-        controller.config["cleaner_last_run"] = time.time()
-        controller.config.pop("cleaner_start_time", None)
-        controller.config.pop("cleaner_cycle_id", None)
-        controller.config.pop("cleaner_orig_mode", None)
-        controller.config.pop("cleaner_orig_manual", None)
-        controller.config.pop("cleaner_mode", None)
-        controller.save_config()
-        controller.save_config(volatile=True)
-
         if mode == "legacy":
             try:
                 self.log_cleaner("EXECUTING LEGACY STOP SEQUENCE...")
@@ -426,6 +415,17 @@ class FanCleanerMixin:
             except Exception as e:
                 self.log_cleaner(f"MODERN STOP ERROR -> {e}")
 
+        controller.config["cleaner_in_progress"] = False
+        controller.config["cleaner_transitioning"] = False
+        controller.config["cleaner_last_run"] = time.time()
+        controller.config.pop("cleaner_start_time", None)
+        controller.config.pop("cleaner_cycle_id", None)
+        controller.config.pop("cleaner_orig_mode", None)
+        controller.config.pop("cleaner_orig_manual", None)
+        controller.config.pop("cleaner_mode", None)
+        controller.save_config()
+        controller.save_config(volatile=True)
+
         controller.config["mode"] = orig_mode
         controller.save_config()
         self.apply_post_cleaner_mode()
@@ -438,16 +438,6 @@ class FanCleanerMixin:
 
         mode = controller.config.get("cleaner_mode", "modern")
         orig_mode = controller.config.get("cleaner_orig_mode", controller.config.get("mode", "auto"))
-
-        controller.config["cleaner_in_progress"] = False
-        controller.config["cleaner_transitioning"] = False
-        controller.config.pop("cleaner_start_time", None)
-        controller.config.pop("cleaner_cycle_id", None)
-        controller.config.pop("cleaner_orig_mode", None)
-        controller.config.pop("cleaner_orig_manual", None)
-        controller.config.pop("cleaner_mode", None)
-        controller.save_config()
-        controller.save_config(volatile=True)
 
         if mode == "modern" and os.path.exists("/proc/acpi/call"):
             try:
@@ -489,6 +479,16 @@ class FanCleanerMixin:
                 time.sleep(2.0)
             except Exception as e:
                 self.log_cleaner(f"MODERN EMERGENCY STOP ERROR -> {e}")
+
+        controller.config["cleaner_in_progress"] = False
+        controller.config["cleaner_transitioning"] = False
+        controller.config.pop("cleaner_start_time", None)
+        controller.config.pop("cleaner_cycle_id", None)
+        controller.config.pop("cleaner_orig_mode", None)
+        controller.config.pop("cleaner_orig_manual", None)
+        controller.config.pop("cleaner_mode", None)
+        controller.save_config()
+        controller.save_config(volatile=True)
 
         controller.config["mode"] = orig_mode
         controller.save_config()

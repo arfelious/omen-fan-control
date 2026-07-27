@@ -8,7 +8,7 @@ __version__ = "1.0.0"
 
 
 def get_data_dir() -> Path:
-    """Root directory for driver sources, assets, and LICENSE (for installs)."""
+    """Root directory for assets, LICENSE, and bundled driver."""
     env = __import__("os").environ.get("OMEN_FAN_CONTROL_DIR")
     if env:
         return Path(env).resolve()
@@ -16,10 +16,8 @@ def get_data_dir() -> Path:
 
 
 def get_driver_dir() -> Path:
-    """Directory containing hp-wmi.c, Makefile, install_driver.sh, dkms.conf, hooks."""
-    data = get_data_dir()
-    driver = data / "driver"
-    return driver if driver.exists() else data
+    """Directory containing install_driver.sh, dkms.conf, hooks, hp-wmi-omen/."""
+    return get_data_dir() / "driver"
 
 
 def get_assets_dir() -> Path:

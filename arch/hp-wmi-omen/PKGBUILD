@@ -1,0 +1,27 @@
+# DKMS kernel module: patched hp-wmi for HP Omen/Victus fan control (Linux < 6.20)
+_pkgbase=hp-wmi-omen
+pkgname="${_pkgbase}-dkms"
+pkgver=1.0
+pkgrel=1
+pkgdesc="Patched hp-wmi driver for HP Omen/Victus fan control (DKMS; for kernels < 6.20)"
+url="https://github.com/arfelious/omen-fan-control"
+license=("GPL")
+arch=("x86_64")
+depends=("dkms" "linux-headers")
+provides=("hp-wmi-omen")
+
+source=(
+  "../../src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c"
+  "../../src/omen_fan_control/data/driver/hp-wmi-omen/hp-wmi.c.orig"
+  "../../src/omen_fan_control/data/driver/hp-wmi-omen/Makefile"
+  "../../src/omen_fan_control/data/driver/dkms.conf"
+)
+sha256sums=("SKIP" "SKIP" "SKIP" "SKIP")
+
+package() {
+  local dkms_dir="/usr/src/${_pkgbase}-${pkgver}"
+  install -Dm644 hp-wmi.c "${pkgdir}${dkms_dir}/hp-wmi.c"
+  install -Dm644 hp-wmi.c.orig "${pkgdir}${dkms_dir}/hp-wmi.c.orig"
+  install -Dm644 Makefile "${pkgdir}${dkms_dir}/Makefile"
+  install -Dm644 dkms.conf "${pkgdir}${dkms_dir}/dkms.conf"
+}

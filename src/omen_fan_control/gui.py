@@ -1,15 +1,13 @@
 import sys
 import os
-import json
-from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QPushButton, QLabel, QFrame, QStackedWidget,
-                            QComboBox, QSpinBox, QMessageBox, QTabWidget, QFileDialog,
-                            QProgressBar, QScrollArea, QSizePolicy, QListView, QTextEdit,
-                            QCheckBox, QGraphicsDropShadowEffect, QLineEdit, QGridLayout)
-from PyQt6.QtCore import Qt, QTimer, QSize, QPoint
-from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QPainter, QBrush, QPen
-from . import OMEN_FAN_DIR, get_assets_dir, get_data_dir
+                            QComboBox, QSpinBox, QMessageBox, QFileDialog,
+                            QProgressBar, QListView, QTextEdit,
+                            QCheckBox, QLineEdit, QGridLayout)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon
+from . import get_assets_dir, get_data_dir
 from .logic import FanController
 from .fan_curve_widget import FanCurveEditor
 from .gui_widgets import ModernButton, NoFocusDelegate, CoreTempDialog, WorkerThread
@@ -1225,11 +1223,11 @@ class MainWindow(QMainWindow):
         self.update_status(avg_temp)
         
         curve = self.controller.config.get("curve", [])
-        if not curve: return
-        
+        if not curve:
+            return
+
         curve.sort(key=lambda p: p[0])
-        target_speed = 0
-        
+
         temp = avg_temp
         
         target_pwm = self.controller.calculate_target_pwm(temp)
@@ -1463,7 +1461,7 @@ class MainWindow(QMainWindow):
         msg_box.setText("Select your mounted Windows drive folder (e.g. /run/media/...) OR pick PowerControlConfig.json directly.")
         btn_dir = msg_box.addButton("Select Windows Mount Folder", QMessageBox.ButtonRole.ActionRole)
         btn_file = msg_box.addButton("Select PowerControlConfig.json File", QMessageBox.ButtonRole.ActionRole)
-        btn_cancel = msg_box.addButton(QMessageBox.StandardButton.Cancel)
+        msg_box.addButton(QMessageBox.StandardButton.Cancel)
 
         msg_box.exec()
         clicked = msg_box.clickedButton()

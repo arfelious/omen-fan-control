@@ -16,7 +16,7 @@ from ._constants import (
 )
 
 if TYPE_CHECKING:
-    from .fan_controller import FanController
+    pass
 
 
 class FanCleanerMixin:
@@ -82,7 +82,6 @@ class FanCleanerMixin:
         return "No cleaner logs found yet."
 
     def cleaner_acpi_call(self, method_id: int, command: int, command_type: int, data_size: int, payload_bytes: list[int]) -> str:
-        controller = self  # type: FanController
         if not os.path.exists("/proc/acpi/call"):
             self.log_cleaner("ERROR: /proc/acpi/call does not exist! acpi_call module not loaded.")
             raise FileNotFoundError("acpi_call kernel module is not loaded (missing /proc/acpi/call).")

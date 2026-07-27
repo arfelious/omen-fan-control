@@ -20,7 +20,7 @@ import click
 import sys
 import time
 import threading
-from . import OMEN_FAN_DIR, get_data_dir
+from . import get_data_dir
 from .logic import FanController
 
 @click.group()
@@ -124,9 +124,12 @@ def install_patch(install_type, temp, perm, restore):
             mode = 'restore'
     
     if not mode:
-        if temp: mode = 'temp'
-        elif perm: mode = 'perm'
-        elif restore: mode = 'restore'
+        if temp:
+            mode = 'temp'
+        elif perm:
+            mode = 'perm'
+        elif restore:
+            mode = 'restore'
         
     if not mode:
         click.echo("Please specify installation type: t (temp, temporary), p (perm, permanent), or r (restore).")
@@ -146,7 +149,8 @@ def install_patch(install_type, temp, perm, restore):
                  success, msg = controller.install_driver_temp(force=True)
                  
         click.echo(msg)
-        if not success: sys.exit(1)
+        if not success:
+            sys.exit(1)
 
     elif mode == 'perm':
         click.echo("Installing permanent driver...")
@@ -161,13 +165,15 @@ def install_patch(install_type, temp, perm, restore):
                  success, msg = controller.install_driver_perm(force=True)
 
         click.echo(msg)
-        if not success: sys.exit(1)
+        if not success:
+            sys.exit(1)
         
     elif mode == 'restore':
         click.echo("Restoring original driver...")
         success, msg = controller.restore_driver()
         click.echo(msg)
-        if not success: sys.exit(1)
+        if not success:
+            sys.exit(1)
 
 @cli.command()
 @click.option('--mode', type=click.Choice(['auto', 'max', 'manual', 'curve', 'last']), help="Set fan mode. 'last' loads from config.")
@@ -233,7 +239,7 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
         # Check driver requirement
         has_driver = controller.pwm1_path and controller.pwm1_path.exists()
         if not has_driver:
-            click.echo(f"Error: Manual mode requires the kernel driver patch (pwm1 not found).")
+            click.echo("Error: Manual mode requires the kernel driver patch (pwm1 not found).")
             click.echo("Run 'omen-fan-control install-patch perm' to install it.")
             sys.exit(1)
 
@@ -270,7 +276,7 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
     elif mode == 'curve':
         has_driver = controller.pwm1_path and controller.pwm1_path.exists()
         if not has_driver:
-            click.echo(f"Error: Curve mode requires the kernel driver patch (pwm1 not found).")
+            click.echo("Error: Curve mode requires the kernel driver patch (pwm1 not found).")
             click.echo("Run 'omen-fan-control install-patch perm' to install it.")
             sys.exit(1)
 
@@ -280,8 +286,10 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
                 with open(curve_csv, 'r') as f:
                     for line in f:
                         line = line.strip()
-                        if not line or line.startswith('#'): continue
-                        if ',' not in line: continue
+                        if not line or line.startswith('#'):
+                            continue
+                        if ',' not in line:
+                            continue
                         
                         parts = line.split(',')
                         if len(parts) >= 2:
@@ -329,9 +337,7 @@ def fan_control(mode, value, curve_csv, no_save, action, source):
 def serve():
     """Run the fan control daemon (foreground). Used by systemd service."""
     import time
-    from . import OMEN_FAN_DIR
     from ._constants import VOLATILE_CONFIG_FILE
-    from .logic import FanController
     controller = get_controller()
     click.echo("Starting Omen Fan Control Daemon...")
     
@@ -843,9 +849,9 @@ def status():
     mode = "Unknown"
     try:
         enable = controller.read_sys_file(controller.pwm1_enable_path)
-        if enable == "0": mode = "Max (0)"
+        if enable == "0":
+            mode = "Max (0)"
         elif enable == "1":
-            # Manual mode could mean fixed manual OR curve service
             if controller.is_service_running():
                 config_mode = controller.config.get("mode", "manual")
                 if config_mode == "curve":
@@ -857,9 +863,11 @@ def status():
                     mode = f"Manual (Service: {config_mode})"
             else:
                 mode = "Manual (1)"
-        elif enable == "2": mode = "Auto (2)"
-        else: mode = f"Unknown ({enable})"
-    except:
+        elif enable == "2":
+            mode = "Auto (2)"
+        else:
+            mode = f"Unknown ({enable})"
+    except Exception:
         mode = "N/A"
     click.echo(f"Driver Mode:       {mode}")
     

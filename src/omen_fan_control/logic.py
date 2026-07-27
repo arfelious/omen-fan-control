@@ -50,7 +50,7 @@ VOLATILE_CONFIG_FILE = VOLATILE_CONFIG_DIR / "config.json"
 
 DEFAULT_CALIBRATION_WAIT = 30
 DEFAULT_WATCHDOG_INTERVAL = 90
-OMEN_FAN_DIR = Path(__file__).parent.absolute() / "data" / "driver"
+OMEN_FAN_DIR = Path(__file__).parent.absolute() / "data" / "driver" / "hp-wmi-omen"
 CONFIG_VERSION = 1
 
 # Supported Board IDs

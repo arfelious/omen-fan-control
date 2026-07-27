@@ -40,16 +40,16 @@ class FanCleanerMixin:
                 pass
 
     def log_debug(self, msg: str) -> None:
-        self.log("DEBUG", msg)
+        self.log(msg, "DEBUG")
 
     def log_info(self, msg: str) -> None:
-        self.log("INFO", msg)
+        self.log(msg, "INFO")
 
     def log_warning(self, msg: str) -> None:
-        self.log("WARNING", msg)
+        self.log(msg, "WARNING")
 
     def log_error(self, msg: str) -> None:
-        self.log("ERROR", msg)
+        self.log(msg, "ERROR")
 
     def log_cleaner(self, message: str, level: str = "DEBUG") -> None:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")

@@ -1,11 +1,14 @@
 #!/bin/bash
-# HP Omen Fan Control - Kernel update hook for Debian/Ubuntu
-# Installed to /etc/kernel/postinst.d/zz-hp-wmi-omen
+# HP Omen Fan Control - Kernel install hook for Fedora/RHEL
+# Builds from /usr/src/hp-wmi-omen-1.0/src/hp-wmi-omen (same as DKMS package layout)
 
-set -e
+COMMAND="$1"
+KERNEL_VERSION="$2"
+SOURCE_DIR="/usr/src/hp-wmi-omen-1.0/src/hp-wmi-omen"
 
-KERNEL_VERSION="$1"
-SOURCE_DIR="/usr/src/hp-wmi-omen"
+if [ "$COMMAND" != "add" ]; then
+    exit 0
+fi
 
 if [ ! -d "$SOURCE_DIR" ]; then
     echo "hp-wmi-omen source not found, skipping..."
@@ -13,7 +16,6 @@ if [ ! -d "$SOURCE_DIR" ]; then
 fi
 
 echo "Building hp-wmi-omen for kernel $KERNEL_VERSION..."
-
 cd "$SOURCE_DIR"
 make clean KVERSION="$KERNEL_VERSION" || true
 make KVERSION="$KERNEL_VERSION"
@@ -23,6 +25,6 @@ mkdir -p "$DEST_DIR"
 install -m 644 hp-wmi.ko "$DEST_DIR/hp-wmi.ko"
 
 depmod -a "$KERNEL_VERSION"
-update-initramfs -u -k "$KERNEL_VERSION" || true
+dracut --force --kver "$KERNEL_VERSION" || true
 
 echo "hp-wmi-omen module installed for kernel $KERNEL_VERSION"

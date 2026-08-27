@@ -1,0 +1,46 @@
+[project]
+name = "omen-fan-control"
+version = "1.0.0"
+description = "Fan control for HP Omen Max, Victus and Omen laptops on Linux"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Arfelious" }]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "PyQt6>=6.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1",
+    "build>=1.0",
+]
+
+[project.scripts]
+omen-fan-control = "omen_fan_control.cli:main"
+omen-fan-control-gui = "omen_fan_control.gui:main"
+
+[project.urls]
+Homepage = "https://github.com/arfelious/omen-fan-control"
+Repository = "https://github.com/arfelious/omen-fan-control"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/omen_fan_control"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/README.md", "/LICENSE.md"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.1",
+    "build>=1.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"

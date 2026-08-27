@@ -1,0 +1,5 @@
+omen-fan-control-dkms (1.0.0) unstable; urgency=medium
+
+  * Metapackage: omen-fan-control app + auto DKMS setup for hp-wmi-omen.
+
+ -- casualsnek <https://github.com/casualsnek>  Fri, 20 Feb 2026 12:00:00 +0000

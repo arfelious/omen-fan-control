@@ -16,11 +16,16 @@ LOG_LEVELS: dict[str, int] = {
 
 if os.geteuid() == 0:
     CONFIG_DIR = Path("/etc/omen-fan-control")
+    VOLATILE_CONFIG_DIR = Path("/run/omen-fan-control")
 else:
     CONFIG_DIR = Path(os.path.expanduser("~/.config/omen-fan-control"))
+    _xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if _xdg_runtime:
+        VOLATILE_CONFIG_DIR = Path(_xdg_runtime) / "omen-fan-control"
+    else:
+        VOLATILE_CONFIG_DIR = CONFIG_DIR / "run"
 
 CONFIG_FILE = CONFIG_DIR / "config.json"
-VOLATILE_CONFIG_DIR = Path("/run/omen-fan-control")
 VOLATILE_CONFIG_FILE = VOLATILE_CONFIG_DIR / "config.json"
 
 DEFAULT_CALIBRATION_WAIT = 30

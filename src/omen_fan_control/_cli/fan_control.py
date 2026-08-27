@@ -111,6 +111,12 @@ def fan_control(
         controller.save_config(volatile=no_save, source=source)
 
     elif mode == "curve":
+        has_driver = controller.pwm1_path and controller.pwm1_path.exists()
+        if not has_driver:
+            click.echo("Error: Curve mode requires the kernel driver patch (pwm1 not found).")
+            click.echo(f"Run '{_cmd} install-patch perm' to install it.")
+            sys.exit(1)
+
         if not service_active:
             click.echo(click.style("WARNING: Service must be running for curve mode to work.", fg="yellow"))
             click.echo(f"Start it with: {_cmd} service start")

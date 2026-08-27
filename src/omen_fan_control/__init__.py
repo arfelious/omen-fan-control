@@ -22,7 +22,13 @@ def get_driver_dir() -> Path:
 
 def get_assets_dir() -> Path:
     """Directory containing logo and other GUI assets."""
-    return get_data_dir() / "assets"
+    data_assets = get_data_dir() / "assets"
+    if data_assets.exists():
+        return data_assets
+    repo_assets = Path(__file__).parent.resolve().parent.parent / "assets"
+    if repo_assets.exists():
+        return repo_assets
+    return data_assets
 
 
 OMEN_FAN_DIR = get_driver_dir()

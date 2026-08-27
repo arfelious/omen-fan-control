@@ -100,5 +100,11 @@ cli.add_command(install_patch)
 cli.add_command(serve)
 cli.add_command(stress)
 
+try:
+    from .. import cli as _full_cli  # noqa: F401, E402
+except ImportError:
+    pass
+
 if __name__ == "__main__":
     main()
+

@@ -22,6 +22,68 @@ detect_distro() {
     fi
 }
 
+check_build_env() {
+    local kver
+    kver="$(uname -r)"
+    local build_dir="/lib/modules/${kver}/build"
+
+    if [ ! -d "$build_dir" ]; then
+        echo ""
+        echo "ERROR: Kernel build directory not found: $build_dir"
+        echo ""
+        echo "  Install kernel headers for your running kernel:"
+        echo "    Debian/Ubuntu : sudo apt install linux-headers-${kver}"
+        echo "    Fedora/RHEL   : sudo dnf install kernel-devel-${kver}"
+        echo "    Arch Linux    : sudo pacman -S linux-headers"
+        echo ""
+        exit 1
+    fi
+
+    local real_dir
+    real_dir="$(readlink -f "$build_dir")"
+
+    if [ ! -f "${real_dir}/include/generated/autoconf.h" ]; then
+        echo ""
+        echo "ERROR: include/generated/autoconf.h not found under $real_dir"
+        echo ""
+        echo "  Your kernel headers appear to be incomplete."
+
+        if [ -f /etc/debian_version ]; then
+            echo ""
+            echo "  Debian/Ubuntu fix:"
+            echo "    sudo apt reinstall linux-headers-${kver}"
+            echo ""
+            echo "  Diagnostic (check if autoconf.h is present):"
+            echo "    ls ${real_dir}/include/generated/"
+        else
+            echo ""
+            echo "  Reinstall your kernel headers package and try again."
+        fi
+        echo ""
+        exit 1
+    fi
+
+    if [ ! -f "${real_dir}/scripts/basic/Makefile" ] && [ ! -f "${build_dir}/scripts/basic/Makefile" ]; then
+        echo ""
+        echo "ERROR: scripts/basic/Makefile not found."
+        echo ""
+        echo "  Your kernel build environment is missing kbuild scripts."
+
+        if [ -f /etc/debian_version ]; then
+            local kbuild_ver
+            kbuild_ver="$(echo "$kver" | cut -d. -f1,2,3 | cut -d+ -f1)"
+            echo ""
+            echo "  Debian/Ubuntu fix:"
+            echo "    sudo apt install \"linux-kbuild-${kbuild_ver}*\""
+        else
+            echo ""
+            echo "  Reinstall your kernel headers/build package."
+        fi
+        echo ""
+        exit 1
+    fi
+}
+
 install_with_dkms() {
     echo "Installing with DKMS..."
     if dkms status | grep -q "${DKMS_NAME}"; then
@@ -51,7 +113,7 @@ install_with_hooks() {
     sudo cp "$SCRIPT_DIR/src/Makefile" "$DKMS_SRC/src/"
     sudo cp -dr --no-preserve=ownership "$SCRIPT_DIR/hp-wmi-omen" "$DKMS_SRC/src/"
     cd "$BUILD_DIR"
-    make -C "/lib/modules/$(uname -r)/build" M="$(pwd)" modules
+    make
     backup_drivers
     DEST_DIR="/lib/modules/$(uname -r)/kernel/drivers/platform/x86/hp"
     sudo mkdir -p "$DEST_DIR"
@@ -80,6 +142,7 @@ install_with_hooks() {
 backup_drivers() {
     echo "Backing up existing drivers..."
     find "/lib/modules/$(uname -r)/kernel/drivers/platform/x86/hp" "/lib/modules/$(uname -r)/updates" -name "hp-wmi.ko*" 2>/dev/null | while read -r OLD_DRIVER; do
+        if [[ "$OLD_DRIVER" == *"$SCRIPT_DIR"* ]]; then continue; fi
         [[ "$OLD_DRIVER" == *".bak" ]] && continue
         if [ ! -f "${OLD_DRIVER}.bak" ]; then
             echo "Backing up: $OLD_DRIVER"
@@ -104,17 +167,32 @@ reload_driver() {
 }
 
 update_initramfs() {
+    echo "Updating initramfs..."
+    local failed=0
     if command -v update-initramfs >/dev/null; then
-        sudo update-initramfs -u
+        sudo update-initramfs -u || failed=1
     elif command -v mkinitcpio >/dev/null; then
-        sudo mkinitcpio -P
+        sudo mkinitcpio -P || failed=1
     elif command -v dracut >/dev/null; then
-        sudo dracut --force
+        if ! sudo dracut --force; then
+            echo "Standard dracut failed, trying with explicit kernel version..."
+            sudo dracut --force --kver "$(uname -r)" || failed=1
+        fi
+    fi
+
+    if [ $failed -eq 1 ]; then
+        echo ""
+        echo "WARNING: initramfs update failed or returned an error."
+        echo "This sometimes happens on Garuda/Arch with non-standard EFI layouts."
+        echo "The driver is installed, but you may need to manually update your boot image"
+        echo "if it doesn't persist after a reboot."
+        echo ""
     fi
 }
 
 main() {
     echo "=== HP Omen Fan Control - Permanent Installation ==="
+    check_build_env
     DISTRO=$(detect_distro)
     echo "Detected distro: $DISTRO"
     FORCE_HOOKS=0

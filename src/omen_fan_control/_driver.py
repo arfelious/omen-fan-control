@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,17 +14,18 @@ if TYPE_CHECKING:
 
 
 class DriverInstallerMixin:
-    def _patch_driver_source(self, fan_max: int) -> tuple[bool, str]:
+    def _patch_driver_source(self, fan_max: int, target_c: Path | None = None) -> tuple[bool, str]:
         orig_file = OMEN_FAN_DIR / "hp-wmi-omen" / "hp-wmi.c.orig"
-        target_file = OMEN_FAN_DIR / "hp-wmi-omen" / "hp-wmi.c"
+        target_file = target_c if target_c is not None else (OMEN_FAN_DIR / "hp-wmi-omen" / "hp-wmi.c")
 
-        if not orig_file.exists():
-            if target_file.exists():
-                shutil.copy(target_file, orig_file)
-            else:
-                return False, "Error: hp-wmi.c not found."
+        if orig_file.exists():
+            source_to_read = orig_file
+        elif (OMEN_FAN_DIR / "hp-wmi-omen" / "hp-wmi.c").exists():
+            source_to_read = OMEN_FAN_DIR / "hp-wmi-omen" / "hp-wmi.c"
+        else:
+            return False, "Error: hp-wmi.c not found."
 
-        with open(orig_file) as f:
+        with open(source_to_read) as f:
             content = f.read()
 
         max_rpm_val = math.floor(fan_max / 100)
@@ -87,8 +89,12 @@ class DriverInstallerMixin:
                 else:
                     print(f"Warning: Could not find array {target_array} in hp-wmi.c")
 
-        with open(target_file, "w") as f:
-            f.write(content)
+        try:
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(target_file, "w") as f:
+                f.write(content)
+        except Exception as e:
+            return False, f"Failed to write patched driver source: {e}"
 
         return True, "Patch applied successfully."
 
@@ -135,37 +141,45 @@ class DriverInstallerMixin:
         if fan_max == 0:
             return False, "Error: Please calibrate or set Manual Max RPM in Options."
 
-        success, msg = self._patch_driver_source(fan_max)
-        if not success:
-            return False, msg
+        with tempfile.TemporaryDirectory(prefix="omen_hp_wmi_") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            src_dir = OMEN_FAN_DIR / "hp-wmi-omen"
+            if not src_dir.exists():
+                return False, f"Error: Driver directory not found at {src_dir}"
 
-        try:
-            subprocess.run(["make"], check=True, cwd=OMEN_FAN_DIR / "hp-wmi-omen", capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            return False, self._format_make_error(e.stderr)
+            for item in src_dir.iterdir():
+                if item.is_file():
+                    shutil.copy2(item, tmp_path / item.name)
 
-        ko_files = list((OMEN_FAN_DIR / "hp-wmi-omen").glob("*.ko"))
-        if not ko_files:
-            return False, "Error: No .ko file found after make."
+            success, msg = self._patch_driver_source(fan_max, target_c=tmp_path / "hp-wmi.c")
+            if not success:
+                return False, msg
 
-        subprocess.run(["modprobe", "-r", "hp-wmi"], check=False)
+            try:
+                subprocess.run(["make"], check=True, cwd=tmp_path, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                return False, self._format_make_error(e.stderr)
 
-        try:
-            deps = ["wmi", "rfkill", "hwmon", "platform_profile", "sparse_keymap", "acpi_ac"]
-            for dep in deps:
-                subprocess.run(["modprobe", dep], check=False, capture_output=True)
+            ko_files = list(tmp_path.glob("*.ko"))
+            if not ko_files:
+                return False, "Error: No .ko file found after make."
 
-            subprocess.run(["modprobe", "sparse_keymap"], check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            return False, f"Loading dependencies failed: {e.stderr}"
+            subprocess.run(["modprobe", "-r", "hp-wmi"], check=False)
 
-        try:
-            subprocess.run(["insmod", str(ko_files[0])], check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            subprocess.run(["modprobe", "hp-wmi"], check=False)
-            return False, f"Insmod failed: {e.stderr}\n(Original driver re-loaded attempts)"
+            try:
+                deps = ["wmi", "rfkill", "hwmon", "platform_profile", "sparse_keymap", "acpi_ac"]
+                for dep in deps:
+                    subprocess.run(["modprobe", dep], check=False, capture_output=True)
 
-        subprocess.run(["make", "clean"], cwd=OMEN_FAN_DIR / "hp-wmi-omen", check=False, capture_output=True)
+                subprocess.run(["modprobe", "sparse_keymap"], check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                return False, f"Loading dependencies failed: {e.stderr}"
+
+            try:
+                subprocess.run(["insmod", str(ko_files[0])], check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                subprocess.run(["modprobe", "hp-wmi"], check=False)
+                return False, f"Insmod failed: {e.stderr}\n(Original driver re-loaded attempts)"
 
         controller.config["install_type"] = "temporary"
         controller.save_config()
@@ -183,14 +197,19 @@ class DriverInstallerMixin:
         if fan_max == 0:
             return False, "Error: Please calibrate or set Manual Max RPM in Options."
 
-        success, msg = self._patch_driver_source(fan_max)
-        if not success:
-            return False, msg
+        with tempfile.TemporaryDirectory(prefix="omen_hp_wmi_perm_") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            build_dir = tmp_path / "driver"
+            shutil.copytree(OMEN_FAN_DIR, build_dir, dirs_exist_ok=True)
 
-        try:
-            subprocess.run(["/bin/bash", "install_driver.sh"], cwd=OMEN_FAN_DIR, check=True)
-        except subprocess.CalledProcessError:
-            return False, "Install script failed. Check terminal output above for details."
+            success, msg = self._patch_driver_source(fan_max, target_c=build_dir / "hp-wmi-omen" / "hp-wmi.c")
+            if not success:
+                return False, msg
+
+            try:
+                subprocess.run(["/bin/bash", "install_driver.sh"], cwd=build_dir, check=True)
+            except subprocess.CalledProcessError:
+                return False, "Install script failed. Check terminal output above for details."
 
         controller.config["install_type"] = "permanent"
         controller.save_config()

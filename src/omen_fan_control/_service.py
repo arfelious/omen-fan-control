@@ -20,8 +20,8 @@ After=multi-user.target
 
 [Service]
 Type=simple
-        ExecStart={sys.executable} -m omen_fan_control.cli serve
-WorkingDirectory={str(OMEN_FAN_DIR)}
+ExecStart={sys.executable} -m omen_fan_control.cli serve
+WorkingDirectory=/
 Restart=on-failure
 StartLimitBurst=5
 RestartSec=5

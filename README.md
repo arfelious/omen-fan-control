@@ -28,6 +28,38 @@ This program also includes a modification that sets the max speed according to c
 
 ## Installation
 
+### System Dependencies
+You must install kernel headers and build tools for the driver patch to compile and persist across kernel updates:
+
+* **Arch Linux / CachyOS / Manjaro:**
+  ```bash
+  sudo pacman -S linux-headers base-devel dkms
+  # Optional (for fan cleaner feature):
+  sudo pacman -S acpi_call-dkms
+  ```
+
+* **Debian / Ubuntu / Pop!_OS / Linux Mint:**
+  ```bash
+  sudo apt install linux-headers-$(uname -r) \
+                   linux-headers-$(uname -r | sed 's/-[^-]*$/-common/') \
+                   "linux-kbuild-$(uname -r | cut -d. -f1,2,3 | cut -d+ -f1)*" \
+                   build-essential dkms
+  # Optional (for fan cleaner feature):
+  sudo apt install acpi_call-dkms
+  ```
+  > **Note:** Debian and Ubuntu split kernel headers into multiple packages: architecture-specific (`linux-headers-<version>-amd64`), common (`linux-headers-<version>-common`), and build scripts (`linux-kbuild-<version>`). All must be installed for out-of-tree module compilation.
+
+* **Fedora / RHEL / Rocky Linux:**
+  ```bash
+  sudo dnf install kernel-devel-$(uname -r) kernel-headers gcc make dkms
+  ```
+
+* **CachyOS / Clang Kernels:** The Makefile detects if your kernel was built with Clang/LLVM and passes the correct `LLVM=1` flags to the build system. No extra configuration is needed.
+
+---
+
+### Choose an Installation Method
+
 Choose one of the following: pipx/uv (recommended), Arch Linux packages, Debian packages, or clone + run from source.
 
 ### Option A: pipx or uv (recommended)
@@ -37,50 +69,52 @@ Install the app in an isolated environment. Driver sources are bundled; you can 
 **Using pipx:**
 ```bash
 pipx install git+https://github.com/arfelious/omen-fan-control.git
-sudo omen-fan-control   status
+sudo omen-fan-control  status
 sudo omen-fan-control-gui
 ```
 
 **Using uv:**
 ```bash
 uv tool install git+https://github.com/arfelious/omen-fan-control.git
-sudo omen-fan-control   status
+sudo omen-fan-control  status
 sudo omen-fan-control-gui
 ```
-
-**System deps (for driver build):** install kernel headers and build tools:
-* **Arch:** `pacman -S linux-headers base-devel`
-* **Debian/Ubuntu:** `apt install linux-headers-$(uname -r) build-essential`
 
 ### Option B: Arch Linux (PKGBUILD)
 
 Build from `arch/`. Two variants are available:
 
-* **`omen-fan-control`** (base) – the app only. Driver sources are bundled so
-  `install-patch permanent` still works, but DKMS is **not** auto-setup.
-  Suitable for kernels >= 6.20 or if you manage DKMS separately.
 * **`omen-fan-control-dkms`** (recommended) – depends on `omen-fan-control`
   and places the driver into `/usr/src/hp-wmi-omen-1.0/` so DKMS builds it
-  automatically on install and on every kernel update.
+  automatically on install and on every kernel update. This project brings
+  support for boards that aren't supported by the original driver so this
+  approach is the best way to ensure compatibility.
+* **`omen-fan-control`** (base) – the app only. Driver sources are bundled so
+  `install-patch permanent` still works, but DKMS is **not** auto-setup.
+  Suitable only for kernels >= 6.20 and if your board is supported by the
+  original `hp-wmi` kernel driver.
 
+#### Option 1) DKMS variant (Recommended: app + auto DKMS)
 ```bash
-# Base (app only, no DKMS auto-setup)
+# 1. Build the base app:
+cd omen-fan-control/arch/omen-fan-control
+makepkg -sf
+
+# 2. Build the DKMS module package:
+cd ../omen-fan-control-dkms
+makepkg -f --nodeps
+
+# 3. Install both packages:
+sudo pacman -U ../omen-fan-control/omen-fan-control-*.pkg.tar.zst omen-fan-control-dkms-*.pkg.tar.zst
+```
+#### Option 2) Base app only (no DKMS auto-setup, only if board is already fully supported)
+```bash
 cd omen-fan-control/arch/omen-fan-control
 makepkg -sf
 sudo pacman -U omen-fan-control-*.pkg.tar.zst
 
-# Or: DKMS variant (app + auto DKMS)
-cd omen-fan-control/arch/omen-fan-control-dkms
-makepkg -sf
-sudo pacman -U omen-fan-control-dkms-*.pkg.tar.zst
-
-# Standalone DKMS-only module (optional)
-cd omen-fan-control/arch/hp-wmi-omen
-makepkg -sf
-sudo pacman -U hp-wmi-omen-dkms-*.pkg.tar.zst
 ```
 
-Driver data is installed under `/usr/share/omen-fan-control`; the app uses it when you run `install-patch permanent`. The `OMEN_FAN_CONTROL_DIR` env var is set via `/etc/profile.d/omen-fan-control.sh`.
 
 ### Option C: Debian / Ubuntu (deb)
 
@@ -114,6 +148,7 @@ uv sync
 sudo uv run omen-fan-control status
 sudo uv run omen-fan-control install-patch permanent
 sudo uv run omen-fan-control service install
+sudo uv run omen-fan-control-gui
 
 # With pip (editable install)
 pip install -e .

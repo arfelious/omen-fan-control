@@ -1,3 +1,3 @@
-# symlink to parent dir where real Makefile and sources live
+# Trampoline to nested hp-wmi-omen module directory
 all clean install modules modules_install:
-	$(MAKE) -C .. $@
+	$(MAKE) -C hp-wmi-omen $@

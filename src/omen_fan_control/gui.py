@@ -568,13 +568,17 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(self.stress_widget)
 
-        # Watchdog
+        # Stretch at bottom pushes main controls up snugly
+        layout.addStretch()
+
+        # Watchdog (anchored to bottom left)
+        watchdog_row = QHBoxLayout()
+        watchdog_row.setContentsMargins(0, 0, 0, 0)
         self.watchdog_check = QCheckBox("Enable Watchdog (Reset every 90s)")
         self.watchdog_check.toggled.connect(self.toggle_watchdog)
-        layout.addWidget(self.watchdog_check)
-        
-        # Stretch at bottom pushes everything up snugly
-        layout.addStretch()
+        watchdog_row.addWidget(self.watchdog_check)
+        watchdog_row.addStretch()
+        layout.addLayout(watchdog_row)
         
         # Restore last saved mode and manual speed
         self.restore_saved_fan_settings()
@@ -1102,7 +1106,7 @@ class MainWindow(QMainWindow):
             self.fan_layout.removeWidget(self.stress_widget)
             
             if text == "Curve":
-                # Place below curve editor container (above watchdog)
+                # Place below curve editor container
                 idx = self.fan_layout.indexOf(self.curve_editor_container)
                 self.fan_layout.insertWidget(idx + 1, self.stress_widget)
             else:

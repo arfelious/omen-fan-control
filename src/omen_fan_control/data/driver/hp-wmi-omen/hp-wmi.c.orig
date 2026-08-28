@@ -96,14 +96,12 @@ static const struct hp_wmi_ops *hp_wmi_compat_ops;
 /* Bridge to the handler-based platform_profile API (kernel <= 6.13). */
 static struct platform_profile_handler hp_wmi_compat_handler;
 
-static int hp_wmi_compat_get(struct platform_profile_handler *pph,
-                             enum platform_profile_option *profile)
+static int hp_wmi_compat_get(struct platform_profile_handler *pph, enum platform_profile_option *profile)
 {
 	return hp_wmi_compat_ops->profile_get(NULL, profile);
 }
 
-static int hp_wmi_compat_set(struct platform_profile_handler *pph,
-                             enum platform_profile_option profile)
+static int hp_wmi_compat_set(struct platform_profile_handler *pph, enum platform_profile_option profile)
 {
 	return hp_wmi_compat_ops->profile_set(NULL, profile);
 }
@@ -113,8 +111,8 @@ static void hp_wmi_compat_remove_cb(void *data)
 	platform_profile_remove();
 }
 
-static struct device *devm_platform_profile_register(struct device *dev, const char *name,
-                                                     void *drvdata, const struct hp_wmi_ops *ops)
+static struct device *devm_platform_profile_register(struct device *dev, const char *name, void *drvdata,
+						     const struct hp_wmi_ops *ops)
 {
 	int err;
 
@@ -139,21 +137,19 @@ static struct device *devm_platform_profile_register(struct device *dev, const c
 	return (struct device *)&hp_wmi_compat_handler;
 }
 
-#else /* OMEN_PP_API_INTERMEDIATE */
+#else  /* OMEN_PP_API_INTERMEDIATE */
 /*
  * Bridge for the Debian 6.12 intermediate API: platform_profile_handler
  * is used for registration, mirroring the OMEN_PP_API_HANDLER path.
  */
 static struct platform_profile_handler hp_wmi_compat_handler;
 
-static int hp_wmi_compat_get_int(struct platform_profile_handler *pph,
-                                 enum platform_profile_option *profile)
+static int hp_wmi_compat_get_int(struct platform_profile_handler *pph, enum platform_profile_option *profile)
 {
 	return hp_wmi_compat_ops->profile_get(NULL, profile);
 }
 
-static int hp_wmi_compat_set_int(struct platform_profile_handler *pph,
-                                 enum platform_profile_option profile)
+static int hp_wmi_compat_set_int(struct platform_profile_handler *pph, enum platform_profile_option profile)
 {
 	return hp_wmi_compat_ops->profile_set(NULL, profile);
 }
@@ -163,8 +159,8 @@ static void hp_wmi_compat_remove_int(void *data)
 	platform_profile_remove();
 }
 
-static struct device *devm_platform_profile_register(struct device *dev, const char *name,
-                                                     void *drvdata, const struct hp_wmi_ops *ops)
+static struct device *devm_platform_profile_register(struct device *dev, const char *name, void *drvdata,
+						     const struct hp_wmi_ops *ops)
 {
 	int err;
 
@@ -203,62 +199,61 @@ MODULE_ALIAS("wmi:5FB7F034-2C63-45E9-BE91-3D44E2C707E4");
 #define HPWMI_BIOS_GUID "5FB7F034-2C63-45E9-BE91-3D44E2C707E4"
 
 enum hp_ec_offsets {
-	HP_EC_OFFSET_UNKNOWN				= 0x00,
-	HP_NO_THERMAL_PROFILE_OFFSET			= 0x01,
-	HP_VICTUS_S_EC_THERMAL_PROFILE_OFFSET		= 0x59,
-	HP_OMEN_EC_THERMAL_PROFILE_FLAGS_OFFSET		= 0x62,
-	HP_OMEN_EC_THERMAL_PROFILE_TIMER_OFFSET		= 0x63,
-	HP_OMEN_EC_THERMAL_PROFILE_OFFSET		= 0x95,
+	HP_EC_OFFSET_UNKNOWN = 0x00,
+	HP_NO_THERMAL_PROFILE_OFFSET = 0x01,
+	HP_VICTUS_S_EC_THERMAL_PROFILE_OFFSET = 0x59,
+	HP_OMEN_EC_THERMAL_PROFILE_FLAGS_OFFSET = 0x62,
+	HP_OMEN_EC_THERMAL_PROFILE_TIMER_OFFSET = 0x63,
+	HP_OMEN_EC_THERMAL_PROFILE_OFFSET = 0x95,
 };
 
-#define HP_FAN_SPEED_AUTOMATIC	 0x00
-#define HP_POWER_LIMIT_DEFAULT	 0x00
+#define HP_FAN_SPEED_AUTOMATIC 0x00
+#define HP_POWER_LIMIT_DEFAULT 0x00
 #define HP_POWER_LIMIT_NO_CHANGE 0xFF
-#define HPWMI_MUX_MODE_UMA		BIT(0)
-#define HPWMI_MUX_MODE_HYBRID		BIT(1)
-#define HPWMI_MUX_MODE_DISCRETE		BIT(2)
-#define HPWMI_MUX_MODE_OPTIMUS		BIT(3)
-#define HPWMI_MUX_MODE_MASK		GENMASK(6, 0)
-#define HPWMI_MUX_LEGACY_MASK		(HPWMI_MUX_MODE_HYBRID | HPWMI_MUX_MODE_DISCRETE)
+#define HPWMI_MUX_MODE_UMA BIT(0)
+#define HPWMI_MUX_MODE_HYBRID BIT(1)
+#define HPWMI_MUX_MODE_DISCRETE BIT(2)
+#define HPWMI_MUX_MODE_OPTIMUS BIT(3)
+#define HPWMI_MUX_MODE_MASK GENMASK(6, 0)
+#define HPWMI_MUX_LEGACY_MASK (HPWMI_MUX_MODE_HYBRID | HPWMI_MUX_MODE_DISCRETE)
 
-#define zero_if_sup(tmp) (zero_insize_support?0:sizeof(tmp)) // use when zero insize is required
+#define zero_if_sup(tmp) (zero_insize_support ? 0 : sizeof(tmp)) // use when zero insize is required
 
 enum hp_thermal_profile_omen_v0 {
-	HP_OMEN_V0_THERMAL_PROFILE_DEFAULT		= 0x00,
-	HP_OMEN_V0_THERMAL_PROFILE_PERFORMANCE		= 0x01,
-	HP_OMEN_V0_THERMAL_PROFILE_COOL			= 0x02,
+	HP_OMEN_V0_THERMAL_PROFILE_DEFAULT = 0x00,
+	HP_OMEN_V0_THERMAL_PROFILE_PERFORMANCE = 0x01,
+	HP_OMEN_V0_THERMAL_PROFILE_COOL = 0x02,
 };
 
 enum hp_thermal_profile_omen_v1 {
-	HP_OMEN_V1_THERMAL_PROFILE_DEFAULT		= 0x30,
-	HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE		= 0x31,
-	HP_OMEN_V1_THERMAL_PROFILE_COOL			= 0x50,
+	HP_OMEN_V1_THERMAL_PROFILE_DEFAULT = 0x30,
+	HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE = 0x31,
+	HP_OMEN_V1_THERMAL_PROFILE_COOL = 0x50,
 };
 
 enum hp_thermal_profile_omen_flags {
-	HP_OMEN_EC_FLAGS_TURBO				= 0x04,
-	HP_OMEN_EC_FLAGS_NOTIMER			= 0x02,
-	HP_OMEN_EC_FLAGS_JUSTSET			= 0x01,
+	HP_OMEN_EC_FLAGS_TURBO = 0x04,
+	HP_OMEN_EC_FLAGS_NOTIMER = 0x02,
+	HP_OMEN_EC_FLAGS_JUSTSET = 0x01,
 };
 
 enum hp_thermal_profile_victus {
-	HP_VICTUS_THERMAL_PROFILE_DEFAULT		= 0x00,
-	HP_VICTUS_THERMAL_PROFILE_PERFORMANCE		= 0x01,
-	HP_VICTUS_THERMAL_PROFILE_QUIET			= 0x03,
+	HP_VICTUS_THERMAL_PROFILE_DEFAULT = 0x00,
+	HP_VICTUS_THERMAL_PROFILE_PERFORMANCE = 0x01,
+	HP_VICTUS_THERMAL_PROFILE_QUIET = 0x03,
 };
 
 enum hp_thermal_profile_victus_s {
-	HP_VICTUS_S_THERMAL_PROFILE_DEFAULT		= 0x00,
-	HP_VICTUS_S_THERMAL_PROFILE_PERFORMANCE		= 0x01,
+	HP_VICTUS_S_THERMAL_PROFILE_DEFAULT = 0x00,
+	HP_VICTUS_S_THERMAL_PROFILE_PERFORMANCE = 0x01,
 };
 
 enum hp_thermal_profile {
-	HP_THERMAL_PROFILE_PERFORMANCE			= 0x00,
-	HP_THERMAL_PROFILE_DEFAULT			= 0x01,
-	HP_THERMAL_PROFILE_COOL				= 0x02,
-	HP_THERMAL_PROFILE_QUIET			= 0x03,
+	HP_THERMAL_PROFILE_PERFORMANCE = 0x00,
+	HP_THERMAL_PROFILE_DEFAULT = 0x01,
+	HP_THERMAL_PROFILE_COOL = 0x02,
+	HP_THERMAL_PROFILE_QUIET = 0x03,
 };
-
 
 struct thermal_profile_params {
 	u8 performance;
@@ -268,31 +263,31 @@ struct thermal_profile_params {
 };
 
 static const struct thermal_profile_params victus_s_thermal_params = {
-	.performance	= HP_VICTUS_S_THERMAL_PROFILE_PERFORMANCE,
-	.balanced	= HP_VICTUS_S_THERMAL_PROFILE_DEFAULT,
-	.low_power	= HP_VICTUS_S_THERMAL_PROFILE_DEFAULT,
-	.ec_tp_offset	= HP_EC_OFFSET_UNKNOWN,
+	.performance = HP_VICTUS_S_THERMAL_PROFILE_PERFORMANCE,
+	.balanced = HP_VICTUS_S_THERMAL_PROFILE_DEFAULT,
+	.low_power = HP_VICTUS_S_THERMAL_PROFILE_DEFAULT,
+	.ec_tp_offset = HP_EC_OFFSET_UNKNOWN,
 };
 
 static const struct thermal_profile_params omen_v1_thermal_params = {
-	.performance	= HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
-	.balanced	= HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
-	.low_power	= HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
-	.ec_tp_offset	= HP_VICTUS_S_EC_THERMAL_PROFILE_OFFSET,
+	.performance = HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
+	.balanced = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+	.low_power = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+	.ec_tp_offset = HP_VICTUS_S_EC_THERMAL_PROFILE_OFFSET,
 };
 
 static const struct thermal_profile_params omen_v1_legacy_thermal_params = {
-	.performance	= HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
-	.balanced	= HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
-	.low_power	= HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
-	.ec_tp_offset	= HP_OMEN_EC_THERMAL_PROFILE_OFFSET,
+	.performance = HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
+	.balanced = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+	.low_power = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+	.ec_tp_offset = HP_OMEN_EC_THERMAL_PROFILE_OFFSET,
 };
 
 static const struct thermal_profile_params omen_v1_no_ec_thermal_params = {
-	.performance	= HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
-	.balanced	= HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
-	.low_power	= HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
-	.ec_tp_offset	= HP_NO_THERMAL_PROFILE_OFFSET,
+	.performance = HP_OMEN_V1_THERMAL_PROFILE_PERFORMANCE,
+	.balanced = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+	.low_power = HP_OMEN_V1_THERMAL_PROFILE_DEFAULT,
+	.ec_tp_offset = HP_NO_THERMAL_PROFILE_OFFSET,
 };
 
 struct hp_wmi_fan_profile_params {
@@ -308,28 +303,28 @@ struct hp_wmi_board_params {
 static int hp_wmi_get_fan_speed_victus_s(int fan);
 
 static const struct hp_wmi_fan_profile_params victus_s_fan_profile_params = {
-	.get_fan_speed	= hp_wmi_get_fan_speed_victus_s,
-	.fan_table	= true,
+	.get_fan_speed = hp_wmi_get_fan_speed_victus_s,
+	.fan_table = true,
 };
 
 static const struct hp_wmi_board_params victus_s_board_params = {
-	.thermal_profile	= &victus_s_thermal_params,
-	.fan_profile		= &victus_s_fan_profile_params,
+	.thermal_profile = &victus_s_thermal_params,
+	.fan_profile = &victus_s_fan_profile_params,
 };
 
 static const struct hp_wmi_board_params omen_v1_board_params = {
-	.thermal_profile	= &omen_v1_thermal_params,
-	.fan_profile		= &victus_s_fan_profile_params,
+	.thermal_profile = &omen_v1_thermal_params,
+	.fan_profile = &victus_s_fan_profile_params,
 };
 
 static const struct hp_wmi_board_params omen_v1_legacy_board_params = {
-	.thermal_profile	= &omen_v1_legacy_thermal_params,
-	.fan_profile		= &victus_s_fan_profile_params,
+	.thermal_profile = &omen_v1_legacy_thermal_params,
+	.fan_profile = &victus_s_fan_profile_params,
 };
 
 static const struct hp_wmi_board_params omen_v1_no_ec_board_params = {
-	.thermal_profile	= &omen_v1_no_ec_thermal_params,
-	.fan_profile		= &victus_s_fan_profile_params,
+	.thermal_profile = &omen_v1_no_ec_thermal_params,
+	.fan_profile = &victus_s_fan_profile_params,
 };
 
 static const struct hp_wmi_board_params *active_board_params;
@@ -351,42 +346,34 @@ static const struct thermal_profile_params *hp_wmi_thermal_profile(void)
  * "OMEN", and it can use the thermal profile stuff if the "Feature" array
  * contains "PerformanceControl".
  */
-static const char * const omen_thermal_profile_boards[] = {
-	"84DA", "84DB", "84DC",
-	"8572", "8573", "8574", "8575",
-	"8600", "8601", "8602", "8603", "8604", "8605", "8606", "8607", "860A",
-	"8746", "8747", "8748", "8749", "874A", "8786", "8787", "8788", "878A",
-	"878B", "878C", "87B5",
-	"886B", "886C", "88C8", "88CB", "88D1", "88D2", "88F4", "88F5", "88F6",
-	"88F7", "88FD", "88FE", "88FF",
-	"8900", "8901", "8902", "8912", "8917", "8918", "8949", "894A", "89EB",
-	"8A15", "8A42", "8A43",
-	"8BAD",
-	"8C58",
-	"8E41",
-	"8BA9", "8BCA", "8D2F",
+static const char *const omen_thermal_profile_boards[] = {
+	"84DA", "84DB", "84DC", "8572", "8573", "8574", "8575", "8600", "8601", "8602", "8603", "8604",
+	"8605", "8606", "8607", "860A", "8746", "8747", "8748", "8749", "874A", "8786", "8787", "8788",
+	"878A", "878B", "878C", "87B5", "886B", "886C", "88C8", "88CB", "88D1", "88D2", "88F4", "88F5",
+	"88F6", "88F7", "88FD", "88FE", "88FF", "8900", "8901", "8902", "8912", "8917", "8918", "8949",
+	"894A", "89EB", "8A15", "8A42", "8A43", "8BAD", "8C58", "8E41", "8BA9", "8BCA", "8D2F",
 };
 
 /* DMI Board names of Omen laptops that are specifically set to be thermal
  * profile version 0 by the Omen Command Center app, regardless of what
  * the get system design information WMI call returns
  */
-static const char * const omen_thermal_profile_force_v0_boards[] = {
-	"8607",
-	"8746", "8747", "8748", "8749", "874A",
+static const char *const omen_thermal_profile_force_v0_boards[] = {
+	"8607", "8746", "8747", "8748", "8749", "874A",
 };
 
 /* DMI board names of Omen laptops that have a thermal profile timer which will
  * cause the embedded controller to set the thermal profile back to
  * "balanced" when reaching zero.
  */
-static const char * const omen_timed_thermal_profile_boards[] = {
-	"8A15", "8A42",
+static const char *const omen_timed_thermal_profile_boards[] = {
+	"8A15",
+	"8A42",
 	"8BAD",
 };
 
 /* DMI Board names of Victus 16-d laptops */
-static const char * const victus_thermal_profile_boards[] = {
+static const char *const victus_thermal_profile_boards[] = {
 	"88F8",
 	"8A25",
 };
@@ -394,111 +381,111 @@ static const char * const victus_thermal_profile_boards[] = {
 /* DMI board-specific feature data for Omen and Victus laptops. */
 static const struct dmi_system_id hp_wmi_feature_boards[] __initconst = {
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8902") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8902")},
 		.driver_data = (void *)&omen_v1_legacy_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8A3D") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8A3D")},
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8A44") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8A44")},
 		.driver_data = (void *)&omen_v1_legacy_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8A4D") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8A4D")},
 		.driver_data = (void *)&omen_v1_legacy_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BAA") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BAA")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BA9") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BA9")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BAB") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BAB")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8B2F") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8B2F")},
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BB3") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BB3")},
 		.driver_data = (void *)&omen_v1_no_ec_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BBE") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BBE")},
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BC2") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BC2")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BCA") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BCA")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BCD") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BCD")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BD4") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BD4")},
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8BD5") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8BD5")},
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8C4D") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C4D")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8C76") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C76")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8C77") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C77")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8C78") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C78")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8C99") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C99")},
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8C9C") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C9C")},
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8D26") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8D26")},
 		.driver_data = (void *)&omen_v1_legacy_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8D41") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8D41")},
 		.driver_data = (void *)&omen_v1_no_ec_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8D87") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8D87")},
 		.driver_data = (void *)&omen_v1_no_ec_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8D88") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8D88")},
 		.driver_data = (void *)&omen_v1_no_ec_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8DD6") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8DD6")},
 		.driver_data = (void *)&omen_v1_no_ec_board_params,
 	},
 	{
-		.matches = { DMI_MATCH(DMI_BOARD_NAME, "8E35") },
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8E35")},
 		.driver_data = (void *)&omen_v1_legacy_board_params,
 	},
 	{},
@@ -507,33 +494,33 @@ static const struct dmi_system_id hp_wmi_feature_boards[] __initconst = {
 static bool is_victus_s_board;
 
 enum hp_wmi_radio {
-	HPWMI_WIFI	= 0x0,
-	HPWMI_BLUETOOTH	= 0x1,
-	HPWMI_WWAN	= 0x2,
-	HPWMI_GPS	= 0x3,
+	HPWMI_WIFI = 0x0,
+	HPWMI_BLUETOOTH = 0x1,
+	HPWMI_WWAN = 0x2,
+	HPWMI_GPS = 0x3,
 };
 
 enum hp_wmi_event_ids {
-	HPWMI_DOCK_EVENT		= 0x01,
-	HPWMI_PARK_HDD			= 0x02,
-	HPWMI_SMART_ADAPTER		= 0x03,
-	HPWMI_BEZEL_BUTTON		= 0x04,
-	HPWMI_WIRELESS			= 0x05,
-	HPWMI_CPU_BATTERY_THROTTLE	= 0x06,
-	HPWMI_LOCK_SWITCH		= 0x07,
-	HPWMI_LID_SWITCH		= 0x08,
-	HPWMI_SCREEN_ROTATION		= 0x09,
-	HPWMI_COOLSENSE_SYSTEM_MOBILE	= 0x0A,
-	HPWMI_COOLSENSE_SYSTEM_HOT	= 0x0B,
-	HPWMI_PROXIMITY_SENSOR		= 0x0C,
-	HPWMI_BACKLIT_KB_BRIGHTNESS	= 0x0D,
-	HPWMI_PEAKSHIFT_PERIOD		= 0x0F,
-	HPWMI_BATTERY_CHARGE_PERIOD	= 0x10,
-	HPWMI_SANITIZATION_MODE		= 0x17,
-	HPWMI_CAMERA_TOGGLE		= 0x1A,
-	HPWMI_FN_P_HOTKEY		= 0x1B,
-	HPWMI_OMEN_KEY			= 0x1D,
-	HPWMI_SMART_EXPERIENCE_APP	= 0x21,
+	HPWMI_DOCK_EVENT = 0x01,
+	HPWMI_PARK_HDD = 0x02,
+	HPWMI_SMART_ADAPTER = 0x03,
+	HPWMI_BEZEL_BUTTON = 0x04,
+	HPWMI_WIRELESS = 0x05,
+	HPWMI_CPU_BATTERY_THROTTLE = 0x06,
+	HPWMI_LOCK_SWITCH = 0x07,
+	HPWMI_LID_SWITCH = 0x08,
+	HPWMI_SCREEN_ROTATION = 0x09,
+	HPWMI_COOLSENSE_SYSTEM_MOBILE = 0x0A,
+	HPWMI_COOLSENSE_SYSTEM_HOT = 0x0B,
+	HPWMI_PROXIMITY_SENSOR = 0x0C,
+	HPWMI_BACKLIT_KB_BRIGHTNESS = 0x0D,
+	HPWMI_PEAKSHIFT_PERIOD = 0x0F,
+	HPWMI_BATTERY_CHARGE_PERIOD = 0x10,
+	HPWMI_SANITIZATION_MODE = 0x17,
+	HPWMI_CAMERA_TOGGLE = 0x1A,
+	HPWMI_FN_P_HOTKEY = 0x1B,
+	HPWMI_OMEN_KEY = 0x1D,
+	HPWMI_SMART_EXPERIENCE_APP = 0x21,
 };
 
 /*
@@ -550,21 +537,21 @@ struct bios_args {
 };
 
 enum hp_wmi_commandtype {
-	HPWMI_DISPLAY_QUERY		= 0x01,
-	HPWMI_HDDTEMP_QUERY		= 0x02,
-	HPWMI_ALS_QUERY			= 0x03,
-	HPWMI_HARDWARE_QUERY		= 0x04,
-	HPWMI_WIRELESS_QUERY		= 0x05,
-	HPWMI_BATTERY_QUERY		= 0x07,
-	HPWMI_BIOS_QUERY		= 0x09,
-	HPWMI_FEATURE_QUERY		= 0x0b,
-	HPWMI_HOTKEY_QUERY		= 0x0c,
-	HPWMI_FEATURE2_QUERY		= 0x0d,
-	HPWMI_WIRELESS2_QUERY		= 0x1b,
-	HPWMI_POSTCODEERROR_QUERY	= 0x2a,
-	HPWMI_SYSTEM_DEVICE_MODE	= 0x40,
-	HPWMI_THERMAL_PROFILE_QUERY	= 0x4c,
-	HPWMI_GRAPHICS_MUX_QUERY	= 0x52,
+	HPWMI_DISPLAY_QUERY = 0x01,
+	HPWMI_HDDTEMP_QUERY = 0x02,
+	HPWMI_ALS_QUERY = 0x03,
+	HPWMI_HARDWARE_QUERY = 0x04,
+	HPWMI_WIRELESS_QUERY = 0x05,
+	HPWMI_BATTERY_QUERY = 0x07,
+	HPWMI_BIOS_QUERY = 0x09,
+	HPWMI_FEATURE_QUERY = 0x0b,
+	HPWMI_HOTKEY_QUERY = 0x0c,
+	HPWMI_FEATURE2_QUERY = 0x0d,
+	HPWMI_WIRELESS2_QUERY = 0x1b,
+	HPWMI_POSTCODEERROR_QUERY = 0x2a,
+	HPWMI_SYSTEM_DEVICE_MODE = 0x40,
+	HPWMI_THERMAL_PROFILE_QUERY = 0x4c,
+	HPWMI_GRAPHICS_MUX_QUERY = 0x52,
 };
 
 struct victus_power_limits {
@@ -582,30 +569,30 @@ struct victus_gpu_power_modes {
 };
 
 enum hp_wmi_gm_commandtype {
-	HPWMI_FAN_SPEED_GET_QUERY		= 0x11,
-	HPWMI_SET_PERFORMANCE_MODE		= 0x1A,
-	HPWMI_FAN_SPEED_MAX_GET_QUERY		= 0x26,
-	HPWMI_FAN_SPEED_MAX_SET_QUERY		= 0x27,
-	HPWMI_GET_SYSTEM_DESIGN_DATA		= 0x28,
-	HPWMI_FAN_COUNT_GET_QUERY		= 0x10,
-	HPWMI_GET_GPU_THERMAL_MODES_QUERY	= 0x21,
-	HPWMI_SET_GPU_THERMAL_MODES_QUERY	= 0x22,
-	HPWMI_SET_POWER_LIMITS_QUERY		= 0x29,
-	HPWMI_VICTUS_S_FAN_SPEED_GET_QUERY	= 0x2D,
-	HPWMI_VICTUS_S_FAN_SPEED_SET_QUERY	= 0x2E,
-	HPWMI_VICTUS_S_GET_FAN_TABLE_QUERY	= 0x2F,
+	HPWMI_FAN_SPEED_GET_QUERY = 0x11,
+	HPWMI_SET_PERFORMANCE_MODE = 0x1A,
+	HPWMI_FAN_SPEED_MAX_GET_QUERY = 0x26,
+	HPWMI_FAN_SPEED_MAX_SET_QUERY = 0x27,
+	HPWMI_GET_SYSTEM_DESIGN_DATA = 0x28,
+	HPWMI_FAN_COUNT_GET_QUERY = 0x10,
+	HPWMI_GET_GPU_THERMAL_MODES_QUERY = 0x21,
+	HPWMI_SET_GPU_THERMAL_MODES_QUERY = 0x22,
+	HPWMI_SET_POWER_LIMITS_QUERY = 0x29,
+	HPWMI_VICTUS_S_FAN_SPEED_GET_QUERY = 0x2D,
+	HPWMI_VICTUS_S_FAN_SPEED_SET_QUERY = 0x2E,
+	HPWMI_VICTUS_S_GET_FAN_TABLE_QUERY = 0x2F,
 };
 
 enum hp_wmi_command {
-	HPWMI_READ	= 0x01,
-	HPWMI_WRITE	= 0x02,
-	HPWMI_ODM	= 0x03,
-	HPWMI_GM	= 0x20008,
+	HPWMI_READ = 0x01,
+	HPWMI_WRITE = 0x02,
+	HPWMI_ODM = 0x03,
+	HPWMI_GM = 0x20008,
 };
 
 enum hp_wmi_hardware_mask {
-	HPWMI_DOCK_MASK		= 0x01,
-	HPWMI_TABLET_MASK	= 0x04,
+	HPWMI_DOCK_MASK = 0x01,
+	HPWMI_TABLET_MASK = 0x04,
 };
 
 struct bios_return {
@@ -614,18 +601,18 @@ struct bios_return {
 };
 
 enum hp_return_value {
-	HPWMI_RET_WRONG_SIGNATURE	= 0x02,
-	HPWMI_RET_UNKNOWN_COMMAND	= 0x03,
-	HPWMI_RET_UNKNOWN_CMDTYPE	= 0x04,
-	HPWMI_RET_INVALID_PARAMETERS	= 0x05,
+	HPWMI_RET_WRONG_SIGNATURE = 0x02,
+	HPWMI_RET_UNKNOWN_COMMAND = 0x03,
+	HPWMI_RET_UNKNOWN_CMDTYPE = 0x04,
+	HPWMI_RET_INVALID_PARAMETERS = 0x05,
 };
 
 enum hp_wireless2_bits {
-	HPWMI_POWER_STATE	= 0x01,
-	HPWMI_POWER_SOFT	= 0x02,
-	HPWMI_POWER_BIOS	= 0x04,
-	HPWMI_POWER_HARD	= 0x08,
-	HPWMI_POWER_FW_OR_HW	= HPWMI_POWER_BIOS | HPWMI_POWER_HARD,
+	HPWMI_POWER_STATE = 0x01,
+	HPWMI_POWER_SOFT = 0x02,
+	HPWMI_POWER_BIOS = 0x04,
+	HPWMI_POWER_HARD = 0x08,
+	HPWMI_POWER_FW_OR_HW = HPWMI_POWER_BIOS | HPWMI_POWER_HARD,
 };
 
 #define IS_HWBLOCKED(x) ((x & HPWMI_POWER_FW_OR_HW) != HPWMI_POWER_FW_OR_HW)
@@ -644,7 +631,7 @@ struct bios_rfkill2_device_state {
 };
 
 /* 7 devices fit into the 128 byte buffer */
-#define HPWMI_MAX_RFKILL2_DEVICES	7
+#define HPWMI_MAX_RFKILL2_DEVICES 7
 
 struct bios_rfkill2_state {
 	u8 unknown[7];
@@ -653,31 +640,50 @@ struct bios_rfkill2_state {
 	struct bios_rfkill2_device_state device[HPWMI_MAX_RFKILL2_DEVICES];
 };
 
-static const struct key_entry hp_wmi_keymap[] = {
-	{ KE_KEY, 0x02,    { KEY_BRIGHTNESSUP } },
-	{ KE_KEY, 0x03,    { KEY_BRIGHTNESSDOWN } },
-	{ KE_KEY, 0x270,   { KEY_MICMUTE } },
-	{ KE_KEY, 0x20e6,  { KEY_PROG1 } },
-	{ KE_KEY, 0x20e8,  { KEY_MEDIA } },
-	{ KE_KEY, 0x2142,  { KEY_MEDIA } },
-	{ KE_KEY, 0x213b,  { KEY_INFO } },
-	{ KE_KEY, 0x2169,  { KEY_ROTATE_DISPLAY } },
-	{ KE_KEY, 0x216a,  { KEY_SETUP } },
-	{ KE_IGNORE, 0x21a4,  }, /* Win Lock On */
-	{ KE_IGNORE, 0x121a4, }, /* Win Lock Off */
-	{ KE_KEY, 0x21a5,  { KEY_PROG2 } }, /* HP Omen Key */
-	{ KE_KEY, 0x21a7,  { KEY_FN_ESC } },
-	{ KE_KEY, 0x21a8,  { KEY_PROG2 } }, /* HP Envy x360 programmable key */
-	{ KE_KEY, 0x21a9,  { KEY_TOUCHPAD_OFF } },
-	{ KE_KEY, 0x121a9, { KEY_TOUCHPAD_ON } },
-	{ KE_KEY, 0x231b,  { KEY_HELP } },
-	{ KE_IGNORE, 0x21ab, }, /* FnLock on */
-	{ KE_IGNORE, 0x121ab, }, /* FnLock off */
-	{ KE_IGNORE, 0x30021aa, }, /* kbd backlight: level 2 -> off */
-	{ KE_IGNORE, 0x33221aa, }, /* kbd backlight: off -> level 1 */
-	{ KE_IGNORE, 0x36421aa, }, /* kbd backlight: level 1 -> level 2*/
-	{ KE_END, 0 }
-};
+static const struct key_entry hp_wmi_keymap[] = {{KE_KEY, 0x02, {KEY_BRIGHTNESSUP}},
+						 {KE_KEY, 0x03, {KEY_BRIGHTNESSDOWN}},
+						 {KE_KEY, 0x270, {KEY_MICMUTE}},
+						 {KE_KEY, 0x20e6, {KEY_PROG1}},
+						 {KE_KEY, 0x20e8, {KEY_MEDIA}},
+						 {KE_KEY, 0x2142, {KEY_MEDIA}},
+						 {KE_KEY, 0x213b, {KEY_INFO}},
+						 {KE_KEY, 0x2169, {KEY_ROTATE_DISPLAY}},
+						 {KE_KEY, 0x216a, {KEY_SETUP}},
+						 {
+							 KE_IGNORE,
+							 0x21a4,
+						 }, /* Win Lock On */
+						 {
+							 KE_IGNORE,
+							 0x121a4,
+						 },				/* Win Lock Off */
+						 {KE_KEY, 0x21a5, {KEY_PROG2}}, /* HP Omen Key */
+						 {KE_KEY, 0x21a7, {KEY_FN_ESC}},
+						 {KE_KEY, 0x21a8, {KEY_PROG2}}, /* HP Envy x360 programmable key */
+						 {KE_KEY, 0x21a9, {KEY_TOUCHPAD_OFF}},
+						 {KE_KEY, 0x121a9, {KEY_TOUCHPAD_ON}},
+						 {KE_KEY, 0x231b, {KEY_HELP}},
+						 {
+							 KE_IGNORE,
+							 0x21ab,
+						 }, /* FnLock on */
+						 {
+							 KE_IGNORE,
+							 0x121ab,
+						 }, /* FnLock off */
+						 {
+							 KE_IGNORE,
+							 0x30021aa,
+						 }, /* kbd backlight: level 2 -> off */
+						 {
+							 KE_IGNORE,
+							 0x33221aa,
+						 }, /* kbd backlight: off -> level 1 */
+						 {
+							 KE_IGNORE,
+							 0x36421aa,
+						 }, /* kbd backlight: level 1 -> level 2*/
+						 {KE_END, 0}};
 
 /*
  * Mutex for the active_platform_profile variable,
@@ -712,25 +718,25 @@ static struct rfkill2_device rfkill2[HPWMI_MAX_RFKILL2_DEVICES];
  * specification version 3.00. A complete list of system enclosures
  * and chassis types is available on Table 17.
  */
-static const char * const tablet_chassis_types[] = {
+static const char *const tablet_chassis_types[] = {
 	"30", /* Tablet*/
 	"31", /* Convertible */
 	"32"  /* Detachable */
 };
 
-#define DEVICE_MODE_TABLET	0x06
+#define DEVICE_MODE_TABLET 0x06
 
 #define CPU_FAN 0
 #define GPU_FAN 1
 
 enum pwm_modes {
-	PWM_MODE_MAX		= 0,
-	PWM_MODE_MANUAL		= 1,
-	PWM_MODE_AUTO		= 2,
+	PWM_MODE_MAX = 0,
+	PWM_MODE_MANUAL = 1,
+	PWM_MODE_AUTO = 2,
 };
 
 struct hp_wmi_hwmon_priv {
-	struct mutex lock;	/* protects mode, pwm */
+	struct mutex lock; /* protects mode, pwm */
 	u8 min_rpm;
 	u8 cpu_max_rpm;
 	u8 gpu_max_rpm;
@@ -760,22 +766,20 @@ struct victus_s_fan_table {
  * 90s delay to prevent the firmware from resetting fan mode after fixed
  * 120s timeout
  */
-#define KEEP_ALIVE_DELAY_SECS     90
+#define KEEP_ALIVE_DELAY_SECS 90
 
 /* Safe fallback max RPM for boards that don't expose a fan table */
-#define OMEN_CPU_MAX_RPM          60
-#define OMEN_GPU_MAX_RPM          58
+#define OMEN_CPU_MAX_RPM 60
+#define OMEN_GPU_MAX_RPM 58
 
 static inline u8 rpm_to_pwm(u8 rpm, u8 max_rpm)
 {
-	return fixp_linear_interpolate(0, 0, max_rpm, U8_MAX,
-				       clamp_val(rpm, 0, max_rpm));
+	return fixp_linear_interpolate(0, 0, max_rpm, U8_MAX, clamp_val(rpm, 0, max_rpm));
 }
 
 static inline u8 pwm_to_rpm(u8 pwm, u8 max_rpm)
 {
-	return fixp_linear_interpolate(0, 0, U8_MAX, max_rpm,
-				       clamp_val(pwm, 0, U8_MAX));
+	return fixp_linear_interpolate(0, 0, U8_MAX, max_rpm, clamp_val(pwm, 0, U8_MAX));
 }
 
 /* map output size to the corresponding WMI method id */
@@ -814,10 +818,9 @@ static inline int encode_outsize_for_pvsz(int outsize)
  *       buffer = kzalloc(128, GFP_KERNEL);
  *       ret = hp_wmi_perform_query(HPWMI_BATTERY_QUERY, HPWMI_READ, buffer, 1, 128)
  */
-static int hp_wmi_perform_query(int query, enum hp_wmi_command command,
-				void *buffer, int insize, int outsize)
+static int hp_wmi_perform_query(int query, enum hp_wmi_command command, void *buffer, int insize, int outsize)
 {
-	struct acpi_buffer input, output = { ACPI_ALLOCATE_BUFFER, NULL };
+	struct acpi_buffer input, output = {ACPI_ALLOCATE_BUFFER, NULL};
 	struct bios_return *bios_return;
 	union acpi_object *obj = NULL;
 	struct bios_args *args = NULL;
@@ -864,8 +867,7 @@ static int hp_wmi_perform_query(int query, enum hp_wmi_command command,
 	ret = bios_return->return_code;
 
 	if (ret) {
-		if (ret != HPWMI_RET_UNKNOWN_COMMAND &&
-		    ret != HPWMI_RET_UNKNOWN_CMDTYPE)
+		if (ret != HPWMI_RET_UNKNOWN_COMMAND && ret != HPWMI_RET_UNKNOWN_CMDTYPE)
 			pr_warn("query 0x%x returned error 0x%x\n", query, ret);
 		goto out_free;
 	}
@@ -895,9 +897,7 @@ static int hp_wmi_get_fan_count_userdefine_trigger(void)
 	u8 fan_data[4] = {};
 	int ret;
 
-	ret = hp_wmi_perform_query(HPWMI_FAN_COUNT_GET_QUERY, HPWMI_GM,
-				   &fan_data, sizeof(u8),
-				   sizeof(fan_data));
+	ret = hp_wmi_perform_query(HPWMI_FAN_COUNT_GET_QUERY, HPWMI_GM, &fan_data, sizeof(u8), sizeof(fan_data));
 	if (ret != 0)
 		return -EINVAL;
 
@@ -907,11 +907,9 @@ static int hp_wmi_get_fan_count_userdefine_trigger(void)
 static int hp_wmi_get_fan_speed(int fan)
 {
 	u8 fsh, fsl;
-	char fan_data[4] = { fan, 0, 0, 0 };
+	char fan_data[4] = {fan, 0, 0, 0};
 
-	int ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_GET_QUERY, HPWMI_GM,
-				       &fan_data, sizeof(char),
-				       sizeof(fan_data));
+	int ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_GET_QUERY, HPWMI_GM, &fan_data, sizeof(char), sizeof(fan_data));
 
 	if (ret != 0)
 		return -EINVAL;
@@ -930,8 +928,7 @@ static int hp_wmi_get_fan_speed_victus_s(int fan)
 	if (fan < 0 || fan >= sizeof(fan_data))
 		return -EINVAL;
 
-	ret = hp_wmi_perform_query(HPWMI_VICTUS_S_FAN_SPEED_GET_QUERY,
-				   HPWMI_GM, &fan_data, sizeof(u8),
+	ret = hp_wmi_perform_query(HPWMI_VICTUS_S_FAN_SPEED_GET_QUERY, HPWMI_GM, &fan_data, sizeof(u8),
 				   sizeof(fan_data));
 	if (ret != 0)
 		return -EINVAL;
@@ -943,8 +940,7 @@ static int hp_wmi_read_int(int query)
 {
 	int val = 0, ret;
 
-	ret = hp_wmi_perform_query(query, HPWMI_READ, &val,
-				   zero_if_sup(val), sizeof(val));
+	ret = hp_wmi_perform_query(query, HPWMI_READ, &val, zero_if_sup(val), sizeof(val));
 
 	if (ret)
 		return ret < 0 ? ret : -EINVAL;
@@ -964,7 +960,7 @@ static int hp_wmi_get_dock_state(void)
 
 static int hp_wmi_get_tablet_mode(void)
 {
-	char system_device_mode[4] = { 0 };
+	char system_device_mode[4] = {0};
 	const char *chassis_type;
 	bool tablet_found;
 	int ret;
@@ -973,15 +969,12 @@ static int hp_wmi_get_tablet_mode(void)
 	if (!chassis_type)
 		return -ENODEV;
 
-	tablet_found = match_string(tablet_chassis_types,
-				    ARRAY_SIZE(tablet_chassis_types),
-				    chassis_type) >= 0;
+	tablet_found = match_string(tablet_chassis_types, ARRAY_SIZE(tablet_chassis_types), chassis_type) >= 0;
 	if (!tablet_found)
 		return -ENODEV;
 
-	ret = hp_wmi_perform_query(HPWMI_SYSTEM_DEVICE_MODE, HPWMI_READ,
-				   system_device_mode, zero_if_sup(system_device_mode),
-				   sizeof(system_device_mode));
+	ret = hp_wmi_perform_query(HPWMI_SYSTEM_DEVICE_MODE, HPWMI_READ, system_device_mode,
+				   zero_if_sup(system_device_mode), sizeof(system_device_mode));
 	if (ret < 0)
 		return ret;
 
@@ -997,8 +990,7 @@ static int omen_thermal_profile_set(int mode)
 	char buffer[2] = {-1, mode};
 	int ret;
 
-	ret = hp_wmi_perform_query(HPWMI_SET_PERFORMANCE_MODE, HPWMI_GM,
-				   &buffer, sizeof(buffer), 0);
+	ret = hp_wmi_perform_query(HPWMI_SET_PERFORMANCE_MODE, HPWMI_GM, &buffer, sizeof(buffer), 0);
 
 	if (ret)
 		return ret < 0 ? ret : -EINVAL;
@@ -1013,28 +1005,24 @@ static bool is_omen_thermal_profile(void)
 	if (!board_name)
 		return false;
 
-	return match_string(omen_thermal_profile_boards,
-			    ARRAY_SIZE(omen_thermal_profile_boards),
-			    board_name) >= 0;
+	return match_string(omen_thermal_profile_boards, ARRAY_SIZE(omen_thermal_profile_boards), board_name) >= 0;
 }
 
 static int omen_get_thermal_policy_version(void)
 {
-	unsigned char buffer[8] = { 0 };
+	unsigned char buffer[8] = {0};
 	int ret;
 
 	const char *board_name = dmi_get_system_info(DMI_BOARD_NAME);
 
 	if (board_name) {
 		int matches = match_string(omen_thermal_profile_force_v0_boards,
-			ARRAY_SIZE(omen_thermal_profile_force_v0_boards),
-			board_name);
+					   ARRAY_SIZE(omen_thermal_profile_force_v0_boards), board_name);
 		if (matches >= 0)
 			return 0;
 	}
 
-	ret = hp_wmi_perform_query(HPWMI_GET_SYSTEM_DESIGN_DATA, HPWMI_GM,
-				   &buffer, sizeof(buffer), sizeof(buffer));
+	ret = hp_wmi_perform_query(HPWMI_GET_SYSTEM_DESIGN_DATA, HPWMI_GM, &buffer, sizeof(buffer), sizeof(buffer));
 
 	if (ret)
 		return ret < 0 ? ret : -EINVAL;
@@ -1058,8 +1046,7 @@ static int hp_wmi_fan_speed_max_set(int enabled)
 {
 	int ret;
 
-	ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_MAX_SET_QUERY, HPWMI_GM,
-				   &enabled, sizeof(enabled), 0);
+	ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_MAX_SET_QUERY, HPWMI_GM, &enabled, sizeof(enabled), 0);
 
 	if (ret)
 		return ret < 0 ? ret : -EINVAL;
@@ -1089,8 +1076,7 @@ static int hp_wmi_fan_speed_set(struct hp_wmi_hwmon_priv *priv)
 	ret = hp_wmi_fan_speed_max_set(0);
 	if (ret < 0)
 		return ret;
-	ret = hp_wmi_perform_query(HPWMI_VICTUS_S_FAN_SPEED_SET_QUERY, HPWMI_GM,
-				   &fan_speed, sizeof(fan_speed), 0);
+	ret = hp_wmi_perform_query(HPWMI_VICTUS_S_FAN_SPEED_SET_QUERY, HPWMI_GM, &fan_speed, sizeof(fan_speed), 0);
 
 	return ret;
 }
@@ -1117,8 +1103,7 @@ static int hp_wmi_fan_speed_max_reset(struct hp_wmi_hwmon_priv *priv)
 static int __init hp_wmi_bios_2008_later(void)
 {
 	int state = 0;
-	int ret = hp_wmi_perform_query(HPWMI_FEATURE_QUERY, HPWMI_READ, &state,
-				       zero_if_sup(state), sizeof(state));
+	int ret = hp_wmi_perform_query(HPWMI_FEATURE_QUERY, HPWMI_READ, &state, zero_if_sup(state), sizeof(state));
 	if (!ret)
 		return 1;
 
@@ -1128,8 +1113,7 @@ static int __init hp_wmi_bios_2008_later(void)
 static int __init hp_wmi_bios_2009_later(void)
 {
 	u8 state[128];
-	int ret = hp_wmi_perform_query(HPWMI_FEATURE2_QUERY, HPWMI_READ, &state,
-				       zero_if_sup(state), sizeof(state));
+	int ret = hp_wmi_perform_query(HPWMI_FEATURE2_QUERY, HPWMI_READ, &state, zero_if_sup(state), sizeof(state));
 	if (!ret)
 		return 1;
 
@@ -1139,8 +1123,7 @@ static int __init hp_wmi_bios_2009_later(void)
 static int __init hp_wmi_enable_hotkeys(void)
 {
 	int value = 0x6e;
-	int ret = hp_wmi_perform_query(HPWMI_BIOS_QUERY, HPWMI_WRITE, &value,
-				       sizeof(value), 0);
+	int ret = hp_wmi_perform_query(HPWMI_BIOS_QUERY, HPWMI_WRITE, &value, sizeof(value), 0);
 
 	return ret <= 0 ? ret : -EINVAL;
 }
@@ -1151,8 +1134,7 @@ static int hp_wmi_set_block(void *data, bool blocked)
 	int query = BIT(r + 8) | ((!blocked) << r);
 	int ret;
 
-	ret = hp_wmi_perform_query(HPWMI_WIRELESS_QUERY, HPWMI_WRITE,
-				   &query, sizeof(query), 0);
+	ret = hp_wmi_perform_query(HPWMI_WIRELESS_QUERY, HPWMI_WRITE, &query, sizeof(query), 0);
 
 	return ret <= 0 ? ret : -EINVAL;
 }
@@ -1188,11 +1170,10 @@ static bool hp_wmi_get_hw_state(enum hp_wmi_radio r)
 static int hp_wmi_rfkill2_set_block(void *data, bool blocked)
 {
 	int rfkill_id = (int)(long)data;
-	char buffer[4] = { 0x01, 0x00, rfkill_id, !blocked };
+	char buffer[4] = {0x01, 0x00, rfkill_id, !blocked};
 	int ret;
 
-	ret = hp_wmi_perform_query(HPWMI_WIRELESS2_QUERY, HPWMI_WRITE,
-				   buffer, sizeof(buffer), 0);
+	ret = hp_wmi_perform_query(HPWMI_WIRELESS2_QUERY, HPWMI_WRITE, buffer, sizeof(buffer), 0);
 
 	return ret <= 0 ? ret : -EINVAL;
 }
@@ -1206,8 +1187,7 @@ static int hp_wmi_rfkill2_refresh(void)
 	struct bios_rfkill2_state state;
 	int err, i;
 
-	err = hp_wmi_perform_query(HPWMI_WIRELESS2_QUERY, HPWMI_READ, &state,
-				   zero_if_sup(state), sizeof(state));
+	err = hp_wmi_perform_query(HPWMI_WIRELESS2_QUERY, HPWMI_READ, &state, zero_if_sup(state), sizeof(state));
 	if (err)
 		return err;
 
@@ -1217,22 +1197,18 @@ static int hp_wmi_rfkill2_refresh(void)
 
 		devstate = &state.device[num];
 
-		if (num >= state.count ||
-		    devstate->rfkill_id != rfkill2[i].id) {
+		if (num >= state.count || devstate->rfkill_id != rfkill2[i].id) {
 			pr_warn("power configuration of the wireless devices unexpectedly changed\n");
 			continue;
 		}
 
-		rfkill_set_states(rfkill2[i].rfkill,
-				  IS_SWBLOCKED(devstate->power),
-				  IS_HWBLOCKED(devstate->power));
+		rfkill_set_states(rfkill2[i].rfkill, IS_SWBLOCKED(devstate->power), IS_HWBLOCKED(devstate->power));
 	}
 
 	return 0;
 }
 
-static ssize_t display_show(struct device *dev, struct device_attribute *attr,
-			    char *buf)
+static ssize_t display_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int value = hp_wmi_read_int(HPWMI_DISPLAY_QUERY);
 
@@ -1241,8 +1217,7 @@ static ssize_t display_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "%d\n", value);
 }
 
-static ssize_t hddtemp_show(struct device *dev, struct device_attribute *attr,
-			    char *buf)
+static ssize_t hddtemp_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int value = hp_wmi_read_int(HPWMI_HDDTEMP_QUERY);
 
@@ -1251,8 +1226,7 @@ static ssize_t hddtemp_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "%d\n", value);
 }
 
-static ssize_t als_show(struct device *dev, struct device_attribute *attr,
-			char *buf)
+static ssize_t als_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int value = hp_wmi_read_int(HPWMI_ALS_QUERY);
 
@@ -1261,8 +1235,7 @@ static ssize_t als_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "%d\n", value);
 }
 
-static ssize_t dock_show(struct device *dev, struct device_attribute *attr,
-			 char *buf)
+static ssize_t dock_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int value = hp_wmi_get_dock_state();
 
@@ -1271,8 +1244,7 @@ static ssize_t dock_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "%d\n", value);
 }
 
-static ssize_t tablet_show(struct device *dev, struct device_attribute *attr,
-			   char *buf)
+static ssize_t tablet_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int value = hp_wmi_get_tablet_mode();
 
@@ -1281,8 +1253,7 @@ static ssize_t tablet_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "%d\n", value);
 }
 
-static ssize_t postcode_show(struct device *dev, struct device_attribute *attr,
-			     char *buf)
+static ssize_t postcode_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	/* Get the POST error code of previous boot failure. */
 	int value = hp_wmi_read_int(HPWMI_POSTCODEERROR_QUERY);
@@ -1292,8 +1263,7 @@ static ssize_t postcode_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "0x%x\n", value);
 }
 
-static ssize_t als_store(struct device *dev, struct device_attribute *attr,
-			 const char *buf, size_t count)
+static ssize_t als_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	u32 tmp;
 	int ret;
@@ -1302,16 +1272,14 @@ static ssize_t als_store(struct device *dev, struct device_attribute *attr,
 	if (ret)
 		return ret;
 
-	ret = hp_wmi_perform_query(HPWMI_ALS_QUERY, HPWMI_WRITE, &tmp,
-				       sizeof(tmp), 0);
+	ret = hp_wmi_perform_query(HPWMI_ALS_QUERY, HPWMI_WRITE, &tmp, sizeof(tmp), 0);
 	if (ret)
 		return ret < 0 ? ret : -EINVAL;
 
 	return count;
 }
 
-static ssize_t postcode_store(struct device *dev, struct device_attribute *attr,
-			      const char *buf, size_t count)
+static ssize_t postcode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	u32 tmp = 1;
 	bool clear;
@@ -1325,8 +1293,7 @@ static ssize_t postcode_store(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 
 	/* Clear the POST error code. It is kept until cleared. */
-	ret = hp_wmi_perform_query(HPWMI_POSTCODEERROR_QUERY, HPWMI_WRITE, &tmp,
-				       sizeof(tmp), 0);
+	ret = hp_wmi_perform_query(HPWMI_POSTCODEERROR_QUERY, HPWMI_WRITE, &tmp, sizeof(tmp), 0);
 	if (ret)
 		return ret < 0 ? ret : -EINVAL;
 
@@ -1354,7 +1321,7 @@ static int camera_shutter_input_setup(void)
 
 	return 0;
 
- err_free_dev:
+err_free_dev:
 	input_free_device(camera_shutter_input_dev);
 	camera_shutter_input_dev = NULL;
 	return err;
@@ -1378,8 +1345,8 @@ static int hp_wmi_get_mux_supported_modes(u8 *supported)
 		return -EINVAL;
 
 	/* Try modern BIOS design data query (128-byte buffer) */
-	ret = hp_wmi_perform_query(HPWMI_GET_SYSTEM_DESIGN_DATA, HPWMI_GM,
-				   buffer, zero_if_sup(req_packet), sizeof(buffer));
+	ret = hp_wmi_perform_query(HPWMI_GET_SYSTEM_DESIGN_DATA, HPWMI_GM, buffer, zero_if_sup(req_packet),
+				   sizeof(buffer));
 	if (ret == 0) {
 		*supported = buffer[7];
 		return 0;
@@ -1391,8 +1358,7 @@ static int hp_wmi_get_mux_supported_modes(u8 *supported)
 	 * responds to a read request. If it succeeds, the hardware has MUX
 	 * capability but lacks the mode map, defaulting to Hybrid + Discrete.
 	 */
-	ret = hp_wmi_perform_query(HPWMI_GRAPHICS_MUX_QUERY, HPWMI_READ,
-				   legacy_buffer, sizeof(legacy_buffer), 0);
+	ret = hp_wmi_perform_query(HPWMI_GRAPHICS_MUX_QUERY, HPWMI_READ, legacy_buffer, sizeof(legacy_buffer), 0);
 	if (ret < 0)
 		return ret;
 	if (ret > 0)
@@ -1410,8 +1376,7 @@ static int hp_wmi_get_mux_mode(u8 *mode)
 	if (!mode)
 		return -EINVAL;
 
-	ret = hp_wmi_perform_query(HPWMI_GRAPHICS_MUX_QUERY, HPWMI_READ,
-				   buffer, sizeof(buffer), sizeof(buffer));
+	ret = hp_wmi_perform_query(HPWMI_GRAPHICS_MUX_QUERY, HPWMI_READ, buffer, sizeof(buffer), sizeof(buffer));
 	if (ret < 0)
 		return ret;
 	if (ret > 0)
@@ -1424,11 +1389,10 @@ static int hp_wmi_get_mux_mode(u8 *mode)
 
 static int hp_wmi_set_mux_mode(u8 mode)
 {
-	u8 buffer[4] = { mode, 0x00, 0x00, 0x00 };
+	u8 buffer[4] = {mode, 0x00, 0x00, 0x00};
 	int ret;
 
-	ret = hp_wmi_perform_query(HPWMI_GRAPHICS_MUX_QUERY, HPWMI_WRITE,
-				   buffer, sizeof(buffer), sizeof(buffer));
+	ret = hp_wmi_perform_query(HPWMI_GRAPHICS_MUX_QUERY, HPWMI_WRITE, buffer, sizeof(buffer), sizeof(buffer));
 	if (ret < 0)
 		return ret;
 	if (ret > 0)
@@ -1437,9 +1401,7 @@ static int hp_wmi_set_mux_mode(u8 mode)
 	return 0;
 }
 
-static ssize_t gpu_mux_mode_show(struct device *dev,
-				 struct device_attribute *attr,
-				 char *buf)
+static ssize_t gpu_mux_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	u8 mode;
 	int ret;
@@ -1451,10 +1413,7 @@ static ssize_t gpu_mux_mode_show(struct device *dev,
 	return sysfs_emit(buf, "%u\n", mode);
 }
 
-static ssize_t gpu_mux_mode_store(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf,
-				  size_t count)
+static ssize_t gpu_mux_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	u32 requested;
 	u8 supported;
@@ -1490,14 +1449,8 @@ static DEVICE_ATTR_RW(postcode);
 static DEVICE_ATTR_RW(gpu_mux_mode);
 
 static struct attribute *hp_wmi_attrs[] = {
-	&dev_attr_display.attr,
-	&dev_attr_hddtemp.attr,
-	&dev_attr_als.attr,
-	&dev_attr_dock.attr,
-	&dev_attr_tablet.attr,
-	&dev_attr_postcode.attr,
-	&dev_attr_gpu_mux_mode.attr,
-	NULL,
+	&dev_attr_display.attr, &dev_attr_hddtemp.attr,	 &dev_attr_als.attr,	      &dev_attr_dock.attr,
+	&dev_attr_tablet.attr,	&dev_attr_postcode.attr, &dev_attr_gpu_mux_mode.attr, NULL,
 };
 ATTRIBUTE_GROUPS(hp_wmi);
 
@@ -1533,11 +1486,9 @@ static void hp_wmi_notify(union acpi_object *obj, void *context)
 	switch (event_id) {
 	case HPWMI_DOCK_EVENT:
 		if (test_bit(SW_DOCK, hp_wmi_input_dev->swbit))
-			input_report_switch(hp_wmi_input_dev, SW_DOCK,
-					    hp_wmi_get_dock_state());
+			input_report_switch(hp_wmi_input_dev, SW_DOCK, hp_wmi_get_dock_state());
 		if (test_bit(SW_TABLET_MODE, hp_wmi_input_dev->swbit))
-			input_report_switch(hp_wmi_input_dev, SW_TABLET_MODE,
-					    hp_wmi_get_tablet_mode());
+			input_report_switch(hp_wmi_input_dev, SW_TABLET_MODE, hp_wmi_get_tablet_mode());
 		input_sync(hp_wmi_input_dev);
 		break;
 	case HPWMI_PARK_HDD:
@@ -1549,8 +1500,7 @@ static void hp_wmi_notify(union acpi_object *obj, void *context)
 		if (key_code < 0)
 			break;
 
-		if (!sparse_keymap_report_event(hp_wmi_input_dev,
-						key_code, 1, true))
+		if (!sparse_keymap_report_event(hp_wmi_input_dev, key_code, 1, true))
 			pr_info("Unknown key code - 0x%x\n", key_code);
 		break;
 	case HPWMI_FN_P_HOTKEY:
@@ -1562,8 +1512,7 @@ static void hp_wmi_notify(union acpi_object *obj, void *context)
 		else
 			key_code = hp_wmi_read_int(HPWMI_HOTKEY_QUERY);
 
-		if (!sparse_keymap_report_event(hp_wmi_input_dev,
-						key_code, 1, true))
+		if (!sparse_keymap_report_event(hp_wmi_input_dev, key_code, 1, true))
 			pr_info("Unknown key code - 0x%x\n", key_code);
 		break;
 	case HPWMI_WIRELESS:
@@ -1573,16 +1522,13 @@ static void hp_wmi_notify(union acpi_object *obj, void *context)
 		}
 
 		if (wifi_rfkill)
-			rfkill_set_states(wifi_rfkill,
-					  hp_wmi_get_sw_state(HPWMI_WIFI),
+			rfkill_set_states(wifi_rfkill, hp_wmi_get_sw_state(HPWMI_WIFI),
 					  hp_wmi_get_hw_state(HPWMI_WIFI));
 		if (bluetooth_rfkill)
-			rfkill_set_states(bluetooth_rfkill,
-					  hp_wmi_get_sw_state(HPWMI_BLUETOOTH),
+			rfkill_set_states(bluetooth_rfkill, hp_wmi_get_sw_state(HPWMI_BLUETOOTH),
 					  hp_wmi_get_hw_state(HPWMI_BLUETOOTH));
 		if (wwan_rfkill)
-			rfkill_set_states(wwan_rfkill,
-					  hp_wmi_get_sw_state(HPWMI_WWAN),
+			rfkill_set_states(wwan_rfkill, hp_wmi_get_sw_state(HPWMI_WWAN),
 					  hp_wmi_get_hw_state(HPWMI_WWAN));
 		break;
 	case HPWMI_CPU_BATTERY_THROTTLE:
@@ -1681,9 +1627,9 @@ static int __init hp_wmi_input_setup(void)
 
 	return 0;
 
- err_uninstall_notifier:
+err_uninstall_notifier:
 	wmi_remove_notify_handler(HPWMI_EVENT_GUID);
- err_free_dev:
+err_free_dev:
 	input_free_device(hp_wmi_input_dev);
 	return err;
 }
@@ -1702,58 +1648,45 @@ static int __init hp_wmi_rfkill_setup(struct platform_device *device)
 	if (wireless < 0)
 		return wireless;
 
-	err = hp_wmi_perform_query(HPWMI_WIRELESS_QUERY, HPWMI_WRITE, &wireless,
-				   sizeof(wireless), 0);
+	err = hp_wmi_perform_query(HPWMI_WIRELESS_QUERY, HPWMI_WRITE, &wireless, sizeof(wireless), 0);
 	if (err)
 		return err;
 
 	if (wireless & 0x1) {
-		wifi_rfkill = rfkill_alloc("hp-wifi", &device->dev,
-					   RFKILL_TYPE_WLAN,
-					   &hp_wmi_rfkill_ops,
-					   (void *) HPWMI_WIFI);
+		wifi_rfkill =
+			rfkill_alloc("hp-wifi", &device->dev, RFKILL_TYPE_WLAN, &hp_wmi_rfkill_ops, (void *)HPWMI_WIFI);
 		if (!wifi_rfkill)
 			return -ENOMEM;
-		rfkill_init_sw_state(wifi_rfkill,
-				     hp_wmi_get_sw_state(HPWMI_WIFI));
-		rfkill_set_hw_state(wifi_rfkill,
-				    hp_wmi_get_hw_state(HPWMI_WIFI));
+		rfkill_init_sw_state(wifi_rfkill, hp_wmi_get_sw_state(HPWMI_WIFI));
+		rfkill_set_hw_state(wifi_rfkill, hp_wmi_get_hw_state(HPWMI_WIFI));
 		err = rfkill_register(wifi_rfkill);
 		if (err)
 			goto register_wifi_error;
 	}
 
 	if (wireless & 0x2) {
-		bluetooth_rfkill = rfkill_alloc("hp-bluetooth", &device->dev,
-						RFKILL_TYPE_BLUETOOTH,
-						&hp_wmi_rfkill_ops,
-						(void *) HPWMI_BLUETOOTH);
+		bluetooth_rfkill = rfkill_alloc("hp-bluetooth", &device->dev, RFKILL_TYPE_BLUETOOTH, &hp_wmi_rfkill_ops,
+						(void *)HPWMI_BLUETOOTH);
 		if (!bluetooth_rfkill) {
 			err = -ENOMEM;
 			goto register_bluetooth_error;
 		}
-		rfkill_init_sw_state(bluetooth_rfkill,
-				     hp_wmi_get_sw_state(HPWMI_BLUETOOTH));
-		rfkill_set_hw_state(bluetooth_rfkill,
-				    hp_wmi_get_hw_state(HPWMI_BLUETOOTH));
+		rfkill_init_sw_state(bluetooth_rfkill, hp_wmi_get_sw_state(HPWMI_BLUETOOTH));
+		rfkill_set_hw_state(bluetooth_rfkill, hp_wmi_get_hw_state(HPWMI_BLUETOOTH));
 		err = rfkill_register(bluetooth_rfkill);
 		if (err)
 			goto register_bluetooth_error;
 	}
 
 	if (wireless & 0x4) {
-		wwan_rfkill = rfkill_alloc("hp-wwan", &device->dev,
-					   RFKILL_TYPE_WWAN,
-					   &hp_wmi_rfkill_ops,
-					   (void *) HPWMI_WWAN);
+		wwan_rfkill =
+			rfkill_alloc("hp-wwan", &device->dev, RFKILL_TYPE_WWAN, &hp_wmi_rfkill_ops, (void *)HPWMI_WWAN);
 		if (!wwan_rfkill) {
 			err = -ENOMEM;
 			goto register_wwan_error;
 		}
-		rfkill_init_sw_state(wwan_rfkill,
-				     hp_wmi_get_sw_state(HPWMI_WWAN));
-		rfkill_set_hw_state(wwan_rfkill,
-				    hp_wmi_get_hw_state(HPWMI_WWAN));
+		rfkill_init_sw_state(wwan_rfkill, hp_wmi_get_sw_state(HPWMI_WWAN));
+		rfkill_set_hw_state(wwan_rfkill, hp_wmi_get_hw_state(HPWMI_WWAN));
 		err = rfkill_register(wwan_rfkill);
 		if (err)
 			goto register_wwan_error;
@@ -1782,8 +1715,7 @@ static int __init hp_wmi_rfkill2_setup(struct platform_device *device)
 	struct bios_rfkill2_state state;
 	int err, i;
 
-	err = hp_wmi_perform_query(HPWMI_WIRELESS2_QUERY, HPWMI_READ, &state,
-				   zero_if_sup(state), sizeof(state));
+	err = hp_wmi_perform_query(HPWMI_WIRELESS2_QUERY, HPWMI_READ, &state, zero_if_sup(state), sizeof(state));
 	if (err)
 		return err < 0 ? err : -EINVAL;
 
@@ -1815,19 +1747,16 @@ static int __init hp_wmi_rfkill2_setup(struct platform_device *device)
 			name = "hp-gps";
 			break;
 		default:
-			pr_warn("unknown device type 0x%x\n",
-				state.device[i].radio_type);
+			pr_warn("unknown device type 0x%x\n", state.device[i].radio_type);
 			continue;
 		}
 
 		if (!state.device[i].vendor_id) {
-			pr_warn("zero device %d while %d reported\n",
-				i, state.count);
+			pr_warn("zero device %d while %d reported\n", i, state.count);
 			continue;
 		}
 
-		rfkill = rfkill_alloc(name, &device->dev, type,
-				      &hp_wmi_rfkill2_ops, (void *)(long)i);
+		rfkill = rfkill_alloc(name, &device->dev, type, &hp_wmi_rfkill2_ops, (void *)(long)i);
 		if (!rfkill) {
 			err = -ENOMEM;
 			goto fail;
@@ -1837,10 +1766,8 @@ static int __init hp_wmi_rfkill2_setup(struct platform_device *device)
 		rfkill2[rfkill2_count].num = i;
 		rfkill2[rfkill2_count].rfkill = rfkill;
 
-		rfkill_init_sw_state(rfkill,
-				     IS_SWBLOCKED(state.device[i].power));
-		rfkill_set_hw_state(rfkill,
-				    IS_HWBLOCKED(state.device[i].power));
+		rfkill_init_sw_state(rfkill, IS_SWBLOCKED(state.device[i].power));
+		rfkill_set_hw_state(rfkill, IS_HWBLOCKED(state.device[i].power));
 
 		if (!(state.device[i].power & HPWMI_POWER_BIOS))
 			pr_info("device %s blocked by BIOS\n", name);
@@ -1891,8 +1818,7 @@ static int platform_profile_omen_get_ec(enum platform_profile_option *profile)
 	return 0;
 }
 
-static int platform_profile_omen_get(struct device *dev,
-				     enum platform_profile_option *profile)
+static int platform_profile_omen_get(struct device *dev, enum platform_profile_option *profile)
 {
 	/*
 	 * We directly return the stored platform profile, as the embedded
@@ -1919,8 +1845,7 @@ static bool has_omen_thermal_profile_ec_timer(void)
 	if (!board_name)
 		return false;
 
-	return match_string(omen_timed_thermal_profile_boards,
-			    ARRAY_SIZE(omen_timed_thermal_profile_boards),
+	return match_string(omen_timed_thermal_profile_boards, ARRAY_SIZE(omen_timed_thermal_profile_boards),
 			    board_name) >= 0;
 }
 
@@ -1977,8 +1902,7 @@ static int platform_profile_omen_set_ec(enum platform_profile_option profile)
 			return err;
 
 		if (profile == PLATFORM_PROFILE_PERFORMANCE)
-			flags = HP_OMEN_EC_FLAGS_NOTIMER |
-				HP_OMEN_EC_FLAGS_TURBO;
+			flags = HP_OMEN_EC_FLAGS_NOTIMER | HP_OMEN_EC_FLAGS_TURBO;
 
 		err = omen_thermal_profile_ec_flags_set(flags);
 		if (err < 0)
@@ -1988,8 +1912,7 @@ static int platform_profile_omen_set_ec(enum platform_profile_option profile)
 	return 0;
 }
 
-static int platform_profile_omen_set(struct device *dev,
-				     enum platform_profile_option profile)
+static int platform_profile_omen_set(struct device *dev, enum platform_profile_option profile)
 {
 	int err;
 
@@ -2011,12 +1934,11 @@ static int thermal_profile_get(void)
 
 static int thermal_profile_set(int thermal_profile)
 {
-	return hp_wmi_perform_query(HPWMI_THERMAL_PROFILE_QUERY, HPWMI_WRITE, &thermal_profile,
-							   sizeof(thermal_profile), 0);
+	return hp_wmi_perform_query(HPWMI_THERMAL_PROFILE_QUERY, HPWMI_WRITE, &thermal_profile, sizeof(thermal_profile),
+				    0);
 }
 
-static int hp_wmi_platform_profile_get(struct device *dev,
-					enum platform_profile_option *profile)
+static int hp_wmi_platform_profile_get(struct device *dev, enum platform_profile_option *profile)
 {
 	int tp;
 
@@ -2026,13 +1948,13 @@ static int hp_wmi_platform_profile_get(struct device *dev,
 
 	switch (tp) {
 	case HP_THERMAL_PROFILE_PERFORMANCE:
-		*profile =  PLATFORM_PROFILE_PERFORMANCE;
+		*profile = PLATFORM_PROFILE_PERFORMANCE;
 		break;
 	case HP_THERMAL_PROFILE_DEFAULT:
-		*profile =  PLATFORM_PROFILE_BALANCED;
+		*profile = PLATFORM_PROFILE_BALANCED;
 		break;
 	case HP_THERMAL_PROFILE_COOL:
-		*profile =  PLATFORM_PROFILE_COOL;
+		*profile = PLATFORM_PROFILE_COOL;
 		break;
 	case HP_THERMAL_PROFILE_QUIET:
 		*profile = PLATFORM_PROFILE_QUIET;
@@ -2044,20 +1966,19 @@ static int hp_wmi_platform_profile_get(struct device *dev,
 	return 0;
 }
 
-static int hp_wmi_platform_profile_set(struct device *dev,
-					enum platform_profile_option profile)
+static int hp_wmi_platform_profile_set(struct device *dev, enum platform_profile_option profile)
 {
 	int err, tp;
 
 	switch (profile) {
 	case PLATFORM_PROFILE_PERFORMANCE:
-		tp =  HP_THERMAL_PROFILE_PERFORMANCE;
+		tp = HP_THERMAL_PROFILE_PERFORMANCE;
 		break;
 	case PLATFORM_PROFILE_BALANCED:
-		tp =  HP_THERMAL_PROFILE_DEFAULT;
+		tp = HP_THERMAL_PROFILE_DEFAULT;
 		break;
 	case PLATFORM_PROFILE_COOL:
-		tp =  HP_THERMAL_PROFILE_COOL;
+		tp = HP_THERMAL_PROFILE_COOL;
 		break;
 	case PLATFORM_PROFILE_QUIET:
 		tp = HP_THERMAL_PROFILE_QUIET;
@@ -2080,9 +2001,7 @@ static bool is_victus_thermal_profile(void)
 	if (!board_name)
 		return false;
 
-	return match_string(victus_thermal_profile_boards,
-			    ARRAY_SIZE(victus_thermal_profile_boards),
-			    board_name) >= 0;
+	return match_string(victus_thermal_profile_boards, ARRAY_SIZE(victus_thermal_profile_boards), board_name) >= 0;
 }
 
 static int platform_profile_victus_get_ec(enum platform_profile_option *profile)
@@ -2110,8 +2029,7 @@ static int platform_profile_victus_get_ec(enum platform_profile_option *profile)
 	return 0;
 }
 
-static int platform_profile_victus_get(struct device *dev,
-				       enum platform_profile_option *profile)
+static int platform_profile_victus_get(struct device *dev, enum platform_profile_option *profile)
 {
 	/* Same behaviour as platform_profile_omen_get */
 	return platform_profile_omen_get(dev, profile);
@@ -2180,17 +2098,13 @@ static int hp_wmi_get_active_fan_speed(int fan)
 	return params->get_fan_speed(fan);
 }
 
-static int victus_s_gpu_thermal_profile_get(bool *ctgp_enable,
-					    bool *ppab_enable,
-					    u8 *dstate,
-					    u8 *gpu_slowdown_temp)
+static int victus_s_gpu_thermal_profile_get(bool *ctgp_enable, bool *ppab_enable, u8 *dstate, u8 *gpu_slowdown_temp)
 {
 	struct victus_gpu_power_modes gpu_power_modes;
 	int ret;
 
-	ret = hp_wmi_perform_query(HPWMI_GET_GPU_THERMAL_MODES_QUERY, HPWMI_GM,
-				   &gpu_power_modes, sizeof(gpu_power_modes),
-				   sizeof(gpu_power_modes));
+	ret = hp_wmi_perform_query(HPWMI_GET_GPU_THERMAL_MODES_QUERY, HPWMI_GM, &gpu_power_modes,
+				   sizeof(gpu_power_modes), sizeof(gpu_power_modes));
 	if (ret == 0) {
 		*ctgp_enable = gpu_power_modes.ctgp_enable ? true : false;
 		*ppab_enable = gpu_power_modes.ppab_enable ? true : false;
@@ -2201,9 +2115,7 @@ static int victus_s_gpu_thermal_profile_get(bool *ctgp_enable,
 	return ret;
 }
 
-static int victus_s_gpu_thermal_profile_set(bool ctgp_enable,
-					    bool ppab_enable,
-					    u8 dstate)
+static int victus_s_gpu_thermal_profile_set(bool ctgp_enable, bool ppab_enable, u8 dstate)
 {
 	struct victus_gpu_power_modes gpu_power_modes;
 	int ret;
@@ -2212,9 +2124,7 @@ static int victus_s_gpu_thermal_profile_set(bool ctgp_enable,
 	u8 current_dstate, current_gpu_slowdown_temp;
 
 	/* Retrieving GPU slowdown temperature, in order to keep it unchanged */
-	ret = victus_s_gpu_thermal_profile_get(&current_ctgp_state,
-					       &current_ppab_state,
-					       &current_dstate,
+	ret = victus_s_gpu_thermal_profile_get(&current_ctgp_state, &current_ppab_state, &current_dstate,
 					       &current_gpu_slowdown_temp);
 	if (ret < 0) {
 		pr_warn("GPU modes not updated, unable to get slowdown temp\n");
@@ -2226,9 +2136,8 @@ static int victus_s_gpu_thermal_profile_set(bool ctgp_enable,
 	gpu_power_modes.dstate = dstate;
 	gpu_power_modes.gpu_slowdown_temp = current_gpu_slowdown_temp;
 
-
-	ret = hp_wmi_perform_query(HPWMI_SET_GPU_THERMAL_MODES_QUERY, HPWMI_GM,
-				   &gpu_power_modes, sizeof(gpu_power_modes), 0);
+	ret = hp_wmi_perform_query(HPWMI_SET_GPU_THERMAL_MODES_QUERY, HPWMI_GM, &gpu_power_modes,
+				   sizeof(gpu_power_modes), 0);
 
 	return ret;
 }
@@ -2252,8 +2161,7 @@ static int victus_s_set_cpu_pl1_pl2(u8 pl1, u8 pl2)
 	power_limits.pl4 = HP_POWER_LIMIT_NO_CHANGE;
 	power_limits.cpu_gpu_concurrent_limit = HP_POWER_LIMIT_NO_CHANGE;
 
-	ret = hp_wmi_perform_query(HPWMI_SET_POWER_LIMITS_QUERY, HPWMI_GM,
-				   &power_limits, sizeof(power_limits), 0);
+	ret = hp_wmi_perform_query(HPWMI_SET_POWER_LIMITS_QUERY, HPWMI_GM, &power_limits, sizeof(power_limits), 0);
 
 	return ret;
 }
@@ -2269,8 +2177,7 @@ static int platform_profile_victus_s_get_ec(enum platform_profile_option *profil
 	if (!params)
 		return -ENODEV;
 
-	if (params->ec_tp_offset == HP_EC_OFFSET_UNKNOWN ||
-	    params->ec_tp_offset == HP_NO_THERMAL_PROFILE_OFFSET) {
+	if (params->ec_tp_offset == HP_EC_OFFSET_UNKNOWN || params->ec_tp_offset == HP_NO_THERMAL_PROFILE_OFFSET) {
 		*profile = active_platform_profile;
 		return 0;
 	}
@@ -2285,11 +2192,9 @@ static int platform_profile_victus_s_get_ec(enum platform_profile_option *profil
 	 * corrected by the Omen Gaming Hub on windows. Hence accept both
 	 * of these values.
 	 */
-	if (tp == victus_s_thermal_params.performance ||
-	    tp == omen_v1_thermal_params.performance) {
+	if (tp == victus_s_thermal_params.performance || tp == omen_v1_thermal_params.performance) {
 		*profile = PLATFORM_PROFILE_PERFORMANCE;
-	} else if (tp == victus_s_thermal_params.balanced ||
-		   tp == omen_v1_thermal_params.balanced) {
+	} else if (tp == victus_s_thermal_params.balanced || tp == omen_v1_thermal_params.balanced) {
 		/*
 		 * Since both PLATFORM_PROFILE_LOW_POWER and
 		 * PLATFORM_PROFILE_BALANCED share the same thermal profile
@@ -2297,9 +2202,7 @@ static int platform_profile_victus_s_get_ec(enum platform_profile_option *profil
 		 * query the GPU CTGP and PPAB states and compare based off of
 		 * that.
 		 */
-		ret = victus_s_gpu_thermal_profile_get(&current_ctgp_state,
-						       &current_ppab_state,
-						       &current_dstate,
+		ret = victus_s_gpu_thermal_profile_get(&current_ctgp_state, &current_ppab_state, &current_dstate,
 						       &current_gpu_slowdown_temp);
 		if (ret < 0)
 			return ret;
@@ -2358,9 +2261,7 @@ static int platform_profile_victus_s_set_ec(enum platform_profile_option profile
 		return err;
 	}
 
-	err = victus_s_gpu_thermal_profile_set(gpu_ctgp_enable,
-					       gpu_ppab_enable,
-					       gpu_dstate);
+	err = victus_s_gpu_thermal_profile_set(gpu_ctgp_enable, gpu_ppab_enable, gpu_dstate);
 	if (err < 0) {
 		pr_err("Failed to set GPU profile %d: %d\n", profile, err);
 		return err;
@@ -2369,8 +2270,7 @@ static int platform_profile_victus_s_set_ec(enum platform_profile_option profile
 	return 0;
 }
 
-static int platform_profile_victus_s_set(struct device *dev,
-					 enum platform_profile_option profile)
+static int platform_profile_victus_s_set(struct device *dev, enum platform_profile_option profile)
 {
 	int err;
 
@@ -2385,8 +2285,7 @@ static int platform_profile_victus_s_set(struct device *dev,
 	return 0;
 }
 
-static int platform_profile_victus_set(struct device *dev,
-				       enum platform_profile_option profile)
+static int platform_profile_victus_set(struct device *dev, enum platform_profile_option profile)
 {
 	int err;
 
@@ -2421,9 +2320,7 @@ static int hp_wmi_platform_profile_probe(void *drvdata, unsigned long *choices)
 	return 0;
 }
 
-static int omen_powersource_event(struct notifier_block *nb,
-				  unsigned long value,
-				  void *data)
+static int omen_powersource_event(struct notifier_block *nb, unsigned long value, void *data)
 {
 	struct acpi_bus_event *event_entry = data;
 	enum platform_profile_option actual_profile;
@@ -2459,8 +2356,7 @@ static int omen_powersource_event(struct notifier_block *nb,
 	 * different from what the EC reports, we restore the user-chosen
 	 * one.
 	 */
-	if (power_supply_is_system_supplied() <= 0 ||
-	    active_platform_profile == actual_profile) {
+	if (power_supply_is_system_supplied() <= 0 || active_platform_profile == actual_profile) {
 		pr_debug("Platform profile update skipped, conditions unmet\n");
 		return NOTIFY_DONE;
 	}
@@ -2478,9 +2374,7 @@ static int omen_powersource_event(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 
-static int victus_s_powersource_event(struct notifier_block *nb,
-				      unsigned long value,
-				      void *data)
+static int victus_s_powersource_event(struct notifier_block *nb, unsigned long value, void *data)
 {
 	struct acpi_bus_event *event_entry = data;
 	enum platform_profile_option actual_profile;
@@ -2512,8 +2406,7 @@ static int victus_s_powersource_event(struct notifier_block *nb,
 
 	if (actual_profile == PLATFORM_PROFILE_PERFORMANCE) {
 		pr_debug("Triggering CPU PL1/PL2 actualization\n");
-		err = victus_s_set_cpu_pl1_pl2(HP_POWER_LIMIT_DEFAULT,
-					       HP_POWER_LIMIT_DEFAULT);
+		err = victus_s_set_cpu_pl1_pl2(HP_POWER_LIMIT_DEFAULT, HP_POWER_LIMIT_DEFAULT);
 		if (err)
 			pr_warn("Failed to actualize power limits: %d\n", err);
 
@@ -2665,8 +2558,7 @@ static int thermal_profile_setup(struct platform_device *device)
 		ops = &hp_wmi_platform_profile_ops;
 	}
 
-	platform_profile_device = devm_platform_profile_register(&device->dev, "hp-wmi",
-								 NULL, ops);
+	platform_profile_device = devm_platform_profile_register(&device->dev, "hp-wmi", NULL, ops);
 	if (IS_ERR(platform_profile_device))
 		return PTR_ERR(platform_profile_device);
 
@@ -2746,11 +2638,9 @@ static int hp_wmi_resume_handler(struct device *device)
 	 */
 	if (hp_wmi_input_dev) {
 		if (test_bit(SW_DOCK, hp_wmi_input_dev->swbit))
-			input_report_switch(hp_wmi_input_dev, SW_DOCK,
-					    hp_wmi_get_dock_state());
+			input_report_switch(hp_wmi_input_dev, SW_DOCK, hp_wmi_get_dock_state());
 		if (test_bit(SW_TABLET_MODE, hp_wmi_input_dev->swbit))
-			input_report_switch(hp_wmi_input_dev, SW_TABLET_MODE,
-					    hp_wmi_get_tablet_mode());
+			input_report_switch(hp_wmi_input_dev, SW_TABLET_MODE, hp_wmi_get_tablet_mode());
 		input_sync(hp_wmi_input_dev);
 	}
 
@@ -2758,24 +2648,19 @@ static int hp_wmi_resume_handler(struct device *device)
 		hp_wmi_rfkill2_refresh();
 
 	if (wifi_rfkill)
-		rfkill_set_states(wifi_rfkill,
-				  hp_wmi_get_sw_state(HPWMI_WIFI),
-				  hp_wmi_get_hw_state(HPWMI_WIFI));
+		rfkill_set_states(wifi_rfkill, hp_wmi_get_sw_state(HPWMI_WIFI), hp_wmi_get_hw_state(HPWMI_WIFI));
 	if (bluetooth_rfkill)
-		rfkill_set_states(bluetooth_rfkill,
-				  hp_wmi_get_sw_state(HPWMI_BLUETOOTH),
+		rfkill_set_states(bluetooth_rfkill, hp_wmi_get_sw_state(HPWMI_BLUETOOTH),
 				  hp_wmi_get_hw_state(HPWMI_BLUETOOTH));
 	if (wwan_rfkill)
-		rfkill_set_states(wwan_rfkill,
-				  hp_wmi_get_sw_state(HPWMI_WWAN),
-				  hp_wmi_get_hw_state(HPWMI_WWAN));
+		rfkill_set_states(wwan_rfkill, hp_wmi_get_sw_state(HPWMI_WWAN), hp_wmi_get_hw_state(HPWMI_WWAN));
 
 	return 0;
 }
 
 static const struct dev_pm_ops hp_wmi_pm_ops = {
-	.resume  = hp_wmi_resume_handler,
-	.restore  = hp_wmi_resume_handler,
+	.resume = hp_wmi_resume_handler,
+	.restore = hp_wmi_resume_handler,
 };
 
 /*
@@ -2785,11 +2670,12 @@ static const struct dev_pm_ops hp_wmi_pm_ops = {
  * triggering a section mismatch warning.
  */
 static struct platform_driver hp_wmi_driver __refdata = {
-	.driver = {
-		.name = "hp-wmi",
-		.pm = &hp_wmi_pm_ops,
-		.dev_groups = hp_wmi_groups,
-	},
+	.driver =
+		{
+			.name = "hp-wmi",
+			.pm = &hp_wmi_pm_ops,
+			.dev_groups = hp_wmi_groups,
+		},
 	.remove = __exit_p(hp_wmi_bios_remove),
 };
 
@@ -2807,15 +2693,13 @@ static int hp_wmi_apply_fan_settings(struct hp_wmi_hwmon_priv *priv)
 		ret = hp_wmi_fan_speed_max_set(1);
 		if (ret < 0)
 			return ret;
-		mod_delayed_work(system_dfl_wq, &priv->keep_alive_dwork,
-				 secs_to_jiffies(KEEP_ALIVE_DELAY_SECS));
+		mod_delayed_work(system_dfl_wq, &priv->keep_alive_dwork, secs_to_jiffies(KEEP_ALIVE_DELAY_SECS));
 		return 0;
 	case PWM_MODE_MANUAL:
 		ret = hp_wmi_fan_speed_set(priv);
 		if (ret < 0)
 			return ret;
-		mod_delayed_work(system_dfl_wq, &priv->keep_alive_dwork,
-				 secs_to_jiffies(KEEP_ALIVE_DELAY_SECS));
+		mod_delayed_work(system_dfl_wq, &priv->keep_alive_dwork, secs_to_jiffies(KEEP_ALIVE_DELAY_SECS));
 		return 0;
 	case PWM_MODE_AUTO:
 		if (hp_wmi_fan_control_supported()) {
@@ -2836,9 +2720,7 @@ static int hp_wmi_apply_fan_settings(struct hp_wmi_hwmon_priv *priv)
 	}
 }
 
-static umode_t hp_wmi_hwmon_is_visible(const void *data,
-				       enum hwmon_sensor_types type,
-				       u32 attr, int channel)
+static umode_t hp_wmi_hwmon_is_visible(const void *data, enum hwmon_sensor_types type, u32 attr, int channel)
 {
 	switch (type) {
 	case hwmon_pwm:
@@ -2859,8 +2741,7 @@ static umode_t hp_wmi_hwmon_is_visible(const void *data,
 	return 0;
 }
 
-static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
-			     u32 attr, int channel, long *val)
+static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type, u32 attr, int channel, long *val)
 {
 	struct hp_wmi_hwmon_priv *priv;
 	int rpm, ret;
@@ -2883,7 +2764,8 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 				rpm = hp_wmi_get_active_fan_speed(channel);
 				if (rpm < 0)
 					return rpm;
-				*val = rpm_to_pwm(rpm / 100, (channel == GPU_FAN) ? priv->gpu_max_rpm : priv->cpu_max_rpm);
+				*val = rpm_to_pwm(rpm / 100,
+						  (channel == GPU_FAN) ? priv->gpu_max_rpm : priv->cpu_max_rpm);
 			} else {
 				/* Fallback: return cached value for legacy OMENs */
 				if (channel == GPU_FAN)
@@ -2893,8 +2775,7 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 			}
 			return 0;
 		}
-		scoped_guard(mutex, &priv->lock)
-			mode = priv->mode;
+		scoped_guard(mutex, &priv->lock) mode = priv->mode;
 		switch (mode) {
 		case PWM_MODE_MAX:
 		case PWM_MODE_MANUAL:
@@ -2910,8 +2791,7 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 	}
 }
 
-static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
-			      u32 attr, int channel, long val)
+static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type, u32 attr, int channel, long val)
 {
 	struct hp_wmi_hwmon_priv *priv;
 	int cpu_rpm, gpu_rpm;
@@ -2971,11 +2851,9 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 	}
 }
 
-static const struct hwmon_channel_info * const info[] = {
+static const struct hwmon_channel_info *const info[] = {
 	HWMON_CHANNEL_INFO(fan, HWMON_F_INPUT, HWMON_F_INPUT),
-	HWMON_CHANNEL_INFO(pwm, HWMON_PWM_ENABLE | HWMON_PWM_INPUT, HWMON_PWM_INPUT),
-	NULL
-};
+	HWMON_CHANNEL_INFO(pwm, HWMON_PWM_ENABLE | HWMON_PWM_INPUT, HWMON_PWM_INPUT), NULL};
 
 static const struct hwmon_ops ops = {
 	.is_visible = hp_wmi_hwmon_is_visible,
@@ -3004,13 +2882,12 @@ static void hp_wmi_hwmon_keep_alive_handler(struct work_struct *work)
 	 */
 	ret = hp_wmi_apply_fan_settings(priv);
 	if (ret)
-		pr_warn_ratelimited("keep-alive failed to refresh fan settings: %d\n",
-				    ret);
+		pr_warn_ratelimited("keep-alive failed to refresh fan settings: %d\n", ret);
 }
 
 static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 {
-	u8 fan_data[128] = { 0 };
+	u8 fan_data[128] = {0};
 	struct victus_s_fan_table *fan_table;
 	u8 min_rpm, cpu_max_rpm, gpu_max_rpm;
 	u8 cpu_rpm, gpu_rpm, noise_db;
@@ -3033,8 +2910,7 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 	 * Victus S fan table query. This covers boards that respond to the
 	 * max-speed query but not to the full fan table query.
 	 */
-	ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_MAX_GET_QUERY, HPWMI_GM,
-				   &max_val, sizeof(max_val), sizeof(max_val));
+	ret = hp_wmi_perform_query(HPWMI_FAN_SPEED_MAX_GET_QUERY, HPWMI_GM, &max_val, sizeof(max_val), sizeof(max_val));
 	if (!ret && max_val != 0) {
 		pr_info("HP WMI: Hardware reported Max RPM: %d000\n", max_val);
 		priv->cpu_max_rpm = max_val;
@@ -3045,18 +2921,17 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 	if (!hp_wmi_fan_table_supported())
 		return 0;
 
-	ret = hp_wmi_perform_query(HPWMI_VICTUS_S_GET_FAN_TABLE_QUERY,
-				   HPWMI_GM, &fan_data, 4, sizeof(fan_data));
+	ret = hp_wmi_perform_query(HPWMI_VICTUS_S_GET_FAN_TABLE_QUERY, HPWMI_GM, &fan_data, 4, sizeof(fan_data));
 	if (ret) {
-		pr_info("HP WMI: Fan table query failed (%d), using cpu_max_rpm=%u, gpu_max_rpm=%u\n",
-			ret, priv->cpu_max_rpm, priv->gpu_max_rpm);
+		pr_info("HP WMI: Fan table query failed (%d), using cpu_max_rpm=%u, gpu_max_rpm=%u\n", ret,
+			priv->cpu_max_rpm, priv->gpu_max_rpm);
 		return 0; /* fall back to defaults already set above */
 	}
 
 	fan_table = (struct victus_s_fan_table *)fan_data;
 	if (fan_table->header.num_fans == 0) {
-		pr_info("HP WMI: Fan table reports 0 fans, using cpu_max_rpm=%u, gpu_max_rpm=%u\n",
-			priv->cpu_max_rpm, priv->gpu_max_rpm);
+		pr_info("HP WMI: Fan table reports 0 fans, using cpu_max_rpm=%u, gpu_max_rpm=%u\n", priv->cpu_max_rpm,
+			priv->gpu_max_rpm);
 		return 0;
 	}
 
@@ -3067,7 +2942,7 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 	cpu_max_rpm = 0;
 	gpu_max_rpm = 0;
 
-	for (i = 0 ; i < num_entries ; i++) {
+	for (i = 0; i < num_entries; i++) {
 		cpu_rpm = fan_table->entries[i].cpu_rpm;
 		gpu_rpm = fan_table->entries[i].gpu_rpm;
 		noise_db = fan_table->entries[i].noise_db;
@@ -3120,8 +2995,7 @@ static int hp_wmi_hwmon_init(void)
 	ret = hp_wmi_setup_fan_settings(priv);
 	if (ret)
 		return ret;
-	hwmon = devm_hwmon_device_register_with_info(dev, "hp", priv,
-						     &chip_info, NULL);
+	hwmon = devm_hwmon_device_register_with_info(dev, "hp", priv, &chip_info, NULL);
 
 	if (IS_ERR(hwmon)) {
 		dev_err(dev, "Could not register hp hwmon device\n");
@@ -3156,7 +3030,8 @@ static void __init setup_active_board_params(void)
 		 */
 		is_victus_s_board = true;
 		if (params->ec_tp_offset == HP_EC_OFFSET_UNKNOWN) {
-			pr_warn("Unknown EC layout for board %s. Thermal profile readback will be disabled. Please report this to platform-driver-x86@vger.kernel.org\n",
+			pr_warn("Unknown EC layout for board %s. Thermal profile readback will be disabled. Please "
+				"report this to platform-driver-x86@vger.kernel.org\n",
 				dmi_get_system_info(DMI_BOARD_NAME));
 		}
 	}
@@ -3171,8 +3046,8 @@ static int __init hp_wmi_init(void)
 	if (!bios_capable && !event_capable)
 		return -ENODEV;
 
-	if (hp_wmi_perform_query(HPWMI_HARDWARE_QUERY, HPWMI_READ, &tmp,
-				 sizeof(tmp), sizeof(tmp)) == HPWMI_RET_INVALID_PARAMETERS)
+	if (hp_wmi_perform_query(HPWMI_HARDWARE_QUERY, HPWMI_READ, &tmp, sizeof(tmp), sizeof(tmp)) ==
+	    HPWMI_RET_INVALID_PARAMETERS)
 		zero_insize_support = true;
 
 	if (event_capable) {
@@ -3182,8 +3057,7 @@ static int __init hp_wmi_init(void)
 	}
 
 	if (bios_capable) {
-		hp_wmi_platform_dev =
-			platform_device_register_simple("hp-wmi", PLATFORM_DEVID_NONE, NULL, 0);
+		hp_wmi_platform_dev = platform_device_register_simple("hp-wmi", PLATFORM_DEVID_NONE, NULL, 0);
 		if (IS_ERR(hp_wmi_platform_dev)) {
 			err = PTR_ERR(hp_wmi_platform_dev);
 			goto err_destroy_input;

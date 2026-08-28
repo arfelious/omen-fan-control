@@ -62,23 +62,31 @@ You must install kernel headers and build tools for the driver patch to compile 
 
 Choose one of the following: pipx/uv (recommended), Arch Linux packages, Debian packages, or clone + run from source.
 
-### Option A: pipx or uv (recommended)
+### Option A: uv or pipx (recommended)
 
 Install the app in an isolated environment. Driver sources are bundled; you can run `install-patch` from the app.
-
-**Using pipx:**
-```bash
-pipx install git+https://github.com/arfelious/omen-fan-control.git
-sudo omen-fan-control  status
-sudo omen-fan-control-gui
-```
 
 **Using uv:**
 ```bash
 uv tool install git+https://github.com/arfelious/omen-fan-control.git
-sudo omen-fan-control  status
+sudo ln -sf "$HOME/.local/bin/omen-fan-control"* /usr/local/bin/
+
+sudo omen-fan-control status
 sudo omen-fan-control-gui
 ```
+
+**Using pipx:**
+```bash
+pipx install git+https://github.com/arfelious/omen-fan-control.git
+sudo ln -sf "$HOME/.local/bin/omen-fan-control"* /usr/local/bin/
+
+sudo omen-fan-control status
+sudo omen-fan-control-gui
+```
+
+
+> **Note:** Because hardware fan control requires root permissions, symlinking the binaries to `/usr/local/bin` ensures `sudo` can locate them.
+
 
 ### Option B: Arch Linux (PKGBUILD)
 

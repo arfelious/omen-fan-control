@@ -53,6 +53,7 @@ SUPPORTED_BOARDS: set[str] = {
     "88F8", "8A25",
     "8BAB", "8BB3", "8BBE", "8BCA", "8BD4", "8BD5", "8C76", "8C77", "8C78", "8BCD",
     "8C4D", "8C99", "8C9C", "8D26", "8D41", "8D87", "8A44", "8A4D", "8C58", "8BA9", "8BAA",
+    "8A3D", "8A43", "8B2F", "8BC2", "8D88", "8DD6", "8E35",
 }
 
 POSSIBLY_SUPPPORTED_OMEN_BOARDS: set[str] = {

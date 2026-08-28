@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import subprocess
 from pathlib import Path
@@ -10,6 +11,15 @@ from ._constants import OMEN_FAN_DIR, VOLATILE_CONFIG_FILE
 
 if TYPE_CHECKING:
     pass
+
+
+def _restore_selinux_context(path: Path | str) -> None:
+    """Restore SELinux security context on the file if restorecon is available."""
+    if shutil.which("restorecon"):
+        try:
+            subprocess.run(["restorecon", "-v", str(path)], check=False, capture_output=True)
+        except Exception:
+            pass
 
 
 class ServiceManagerMixin:
@@ -35,6 +45,7 @@ WantedBy=multi-user.target
         try:
             service_path.parent.mkdir(parents=True, exist_ok=True)
             service_path.write_text(service_content)
+            _restore_selinux_context(service_path)
             subprocess.run(["systemctl", "daemon-reload"], check=True)
             subprocess.run(["systemctl", "enable", "omen-fan-control.service"], check=True)
             subprocess.run(["systemctl", "start", "omen-fan-control.service"], check=True)
@@ -109,6 +120,7 @@ WantedBy=multi-user.target
         try:
             service_path.parent.mkdir(parents=True, exist_ok=True)
             service_path.write_text(service_content)
+            _restore_selinux_context(service_path)
             subprocess.run(["systemctl", "daemon-reload"], check=True)
             subprocess.run(["systemctl", "enable", "omen-fan-shutdown.service"], check=True)
             subprocess.run(["systemctl", "start", "omen-fan-shutdown.service"], check=True)

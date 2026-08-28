@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import shutil
 import subprocess
 import tempfile
@@ -29,8 +30,14 @@ class DriverInstallerMixin:
             content = f.read()
 
         max_rpm_val = math.floor(fan_max / 100)
-        new_define = f"#define OMEN_MAX_RPM {max_rpm_val}"
-        content = content.replace("#define OMEN_MAX_RPM 60", new_define)
+        cpu_max = self.config.get("fan1_max", 0) or fan_max
+        gpu_max = self.config.get("fan2_max", 0) or fan_max
+        cpu_max_val = math.floor(cpu_max / 100) if cpu_max > 0 else max_rpm_val
+        gpu_max_val = math.floor(gpu_max / 100) if gpu_max > 0 else max_rpm_val
+
+        content = re.sub(r'#define\s+OMEN_CPU_MAX_RPM\s+\d+', f'#define OMEN_CPU_MAX_RPM          {cpu_max_val}', content)
+        content = re.sub(r'#define\s+OMEN_GPU_MAX_RPM\s+\d+', f'#define OMEN_GPU_MAX_RPM          {gpu_max_val}', content)
+        content = re.sub(r'#define\s+OMEN_MAX_RPM\s+\d+', f'#define OMEN_MAX_RPM              {max_rpm_val}', content)
 
         if self.config.get("enable_experimental", False):
             board_name = self.config.get("cached_board_name")

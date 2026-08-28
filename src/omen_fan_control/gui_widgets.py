@@ -218,3 +218,129 @@ class CoreTempDialog(QDialog):
 
             self.grid.addWidget(item, row, col)
             self.temp_labels[label] = lbl_val
+
+
+class FanSpeedDialog(QDialog):
+    def __init__(self, controller, parent=None):
+        super().__init__(parent)
+        self.controller = controller
+        self.setWindowTitle("Fan Speeds")
+        self.setFixedSize(320, 140)
+        self.setStyleSheet("""
+            QDialog { background-color: #1e1e1e; color: #e0e0e0; }
+            QFrame#FanCard {
+                background-color: #252526;
+                border: 1px solid #383838;
+                border-radius: 6px;
+            }
+            QLabel {
+                background-color: transparent;
+                border: none;
+                padding: 0px;
+            }
+            QLabel#FanTitle {
+                font-size: 12px;
+                font-weight: 600;
+                color: #aaa;
+            }
+            QLabel#FanVal {
+                font-size: 17px;
+                font-weight: bold;
+                color: #d63333;
+            }
+            QLabel#FanRev {
+                font-size: 10px;
+                font-weight: bold;
+                color: #e65100;
+            }
+            QPushButton#CloseBtn {
+                background-color: #333;
+                color: #ccc;
+                font-size: 12px;
+                padding: 4px 16px;
+                border-radius: 3px;
+                border: 1px solid #444;
+            }
+            QPushButton#CloseBtn:hover {
+                background-color: #444;
+                color: #fff;
+                border-color: #666;
+            }
+        """)
+
+        self.layout_main = QVBoxLayout(self)
+        self.layout_main.setContentsMargins(14, 12, 14, 12)
+        self.layout_main.setSpacing(10)
+
+        self.cards_widget = QWidget()
+        self.cards_layout = QHBoxLayout(self.cards_widget)
+        self.cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.cards_layout.setSpacing(10)
+
+        self.layout_main.addWidget(self.cards_widget)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn = QPushButton("Close")
+        btn.setObjectName("CloseBtn")
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.clicked.connect(self.accept)
+        btn_row.addWidget(btn)
+        btn_row.addStretch()
+        self.layout_main.addLayout(btn_row)
+
+        self.fan_cards: dict[str, tuple[QLabel, QLabel]] = {}
+        self.refresh_fans()
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.refresh_fans)
+        self.timer.start(1000)
+
+    def refresh_fans(self):
+        fans = self.controller.get_both_fan_speeds()
+        if not fans:
+            return
+
+        if not self.fan_cards:
+            for name, rpm, is_rev in fans:
+                card = QFrame()
+                card.setObjectName("FanCard")
+                card_layout = QVBoxLayout(card)
+                card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                card_layout.setContentsMargins(10, 8, 10, 8)
+                card_layout.setSpacing(2)
+
+                lbl_name = QLabel(name)
+                lbl_name.setObjectName("FanTitle")
+                lbl_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                rpm_text = f"-{rpm} RPM" if (is_rev and rpm > 0) else f"{rpm} RPM"
+                lbl_val = QLabel(rpm_text)
+                lbl_val.setObjectName("FanVal")
+                lbl_val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                lbl_rev = QLabel("(Reverse)" if (is_rev and rpm > 0) else "")
+                lbl_rev.setObjectName("FanRev")
+                lbl_rev.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                if not (is_rev and rpm > 0):
+                    lbl_rev.setVisible(False)
+
+                card_layout.addWidget(lbl_name)
+                card_layout.addWidget(lbl_val)
+                card_layout.addWidget(lbl_rev)
+
+                self.cards_layout.addWidget(card)
+                self.fan_cards[name] = (lbl_val, lbl_rev)
+        else:
+            for name, rpm, is_rev in fans:
+                if name in self.fan_cards:
+                    lbl_val, lbl_rev = self.fan_cards[name]
+                    rpm_text = f"-{rpm} RPM" if (is_rev and rpm > 0) else f"{rpm} RPM"
+                    lbl_val.setText(rpm_text)
+                    if is_rev and rpm > 0:
+                        lbl_rev.setText("(Reverse)")
+                        lbl_rev.setVisible(True)
+                    else:
+                        lbl_rev.setVisible(False)
+
+

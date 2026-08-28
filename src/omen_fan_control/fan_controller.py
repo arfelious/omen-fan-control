@@ -67,6 +67,7 @@ class FanController(
             self.hwmon_path = None
             self.pwm1_enable_path = None
             self.pwm1_path = None
+            self.pwm2_path = None
             self.fan1_input_path = None
             self.fan2_input_path = None
             return
@@ -74,6 +75,7 @@ class FanController(
         self.hwmon_path = Path(paths[0])
         self.pwm1_enable_path = self.hwmon_path / "pwm1_enable"
         self.pwm1_path = self.hwmon_path / "pwm1"
+        self.pwm2_path = self.hwmon_path / "pwm2"
         self.fan1_input_path = self.hwmon_path / "fan1_input"
         self.fan2_input_path = self.hwmon_path / "fan2_input"
         self.cpu_temp_path = self._find_cpu_temp_path()
@@ -161,6 +163,19 @@ class FanController(
 
         is_reverse = is_rev1 or is_rev2 or self.config.get("cleaner_in_progress", False)
         return max(rpm1, rpm2), is_reverse
+
+    def get_both_fan_speeds(self) -> list[tuple[str, int, bool]]:
+        val1 = self.read_sys_file(self.fan1_input_path)
+        val2 = self.read_sys_file(self.fan2_input_path)
+
+        rpm1, is_rev1 = self.parse_hwmon_rpm(val1)
+        rpm2, is_rev2 = self.parse_hwmon_rpm(val2)
+
+        is_cleaner = self.config.get("cleaner_in_progress", False)
+        return [
+            ("Fan 1 (CPU)", rpm1, is_rev1 or is_cleaner),
+            ("Fan 2 (GPU)", rpm2, is_rev2 or is_cleaner),
+        ]
 
     def get_cpu_temp(self) -> int:
         if self.cpu_temp_path:
@@ -263,7 +278,10 @@ class FanController(
         current_enable = self.read_sys_file(self.pwm1_enable_path)
         if current_enable != "1":
             self.write_sys_file(self.pwm1_enable_path, 1)
-        self.write_sys_file(self.pwm1_path, str(int(value)))
+        val_str = str(int(value))
+        self.write_sys_file(self.pwm1_path, val_str)
+        if self.pwm2_path and self.pwm2_path.exists():
+            self.write_sys_file(self.pwm2_path, val_str)
 
     def calculate_target_pwm(self, current_temp: int) -> int | None:
         curve = self.config.get("curve", [])
@@ -297,37 +315,53 @@ class FanController(
 
         return int(round(target_speed_percent / 100 * 255))
 
-    def calibrate(self) -> Generator[int, None, int]:
+    def calibrate(self) -> Generator[int, None, tuple[int, int]]:
         print("Starting calibration...")
 
         try:
             prev_enable = self.read_sys_file(self.pwm1_enable_path) or "2"
             prev_pwm = self.read_sys_file(self.pwm1_path) or "0"
+            prev_pwm2 = self.read_sys_file(self.pwm2_path) if (self.pwm2_path and self.pwm2_path.exists()) else None
         except Exception:
             prev_enable = "2"
             prev_pwm = "0"
+            prev_pwm2 = None
 
         self.set_fan_mode('max')
 
-        wait_time = self.config.get("calibration_wait", DEFAULT_CALIBRATION_WAIT)
-        steps = 10
-        for i in range(steps):
-            time.sleep(wait_time / steps)
-            yield int((i + 1) / steps * 100)
-
-        max_rpm = self.get_fan_speed()
-        self.config["fan_max"] = max_rpm
-        self.save_config()
-
         try:
-            if prev_enable:
-                self.write_sys_file(self.pwm1_enable_path, prev_enable)
-            if prev_pwm and str(prev_enable).strip() == "1":
-                self.write_sys_file(self.pwm1_path, prev_pwm)
-        except Exception as e:
-            print(f"Error restoring fan state: {e}")
+            wait_time = self.config.get("calibration_wait", DEFAULT_CALIBRATION_WAIT)
+            steps = 10
+            for i in range(steps):
+                time.sleep(wait_time / steps)
+                yield int((i + 1) / steps * 100)
 
-        return max_rpm
+            val1 = self.read_sys_file(self.fan1_input_path)
+            val2 = self.read_sys_file(self.fan2_input_path)
+            rpm1, _ = self.parse_hwmon_rpm(val1)
+            rpm2, _ = self.parse_hwmon_rpm(val2)
+
+            max_rpm = max(rpm1, rpm2)
+            self.config["fan_max"] = max_rpm
+            self.config["fan1_max"] = rpm1
+            self.config["fan2_max"] = rpm2
+            self.save_config()
+
+            print(f"Calibration finished: Fan 1={rpm1} RPM, Fan 2={rpm2} RPM")
+            return rpm1, rpm2
+        except GeneratorExit:
+            print("Stopping calibration...")
+            raise
+        finally:
+            try:
+                if prev_enable:
+                    self.write_sys_file(self.pwm1_enable_path, prev_enable)
+                if prev_pwm and str(prev_enable).strip() == "1":
+                    self.write_sys_file(self.pwm1_path, prev_pwm)
+                    if prev_pwm2 and self.pwm2_path and self.pwm2_path.exists():
+                        self.write_sys_file(self.pwm2_path, prev_pwm2)
+            except Exception as e:
+                print(f"Error restoring fan state: {e}")
 
     def start_stress_test(self, duration_sec: int, core_count: int | None = None) -> bool:
         if core_count is None:
@@ -351,6 +385,7 @@ class FanController(
 
     def stop_stress_test(self) -> None:
         if hasattr(self, 'stress_processes') and self.stress_processes:
+            print("Stopping stress test...")
             for p in self.stress_processes:
                 try:
                     p.terminate()

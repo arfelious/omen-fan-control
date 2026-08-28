@@ -732,7 +732,8 @@ enum pwm_modes {
 struct hp_wmi_hwmon_priv {
 	struct mutex lock;	/* protects mode, pwm */
 	u8 min_rpm;
-	u8 max_rpm;
+	u8 cpu_max_rpm;
+	u8 gpu_max_rpm;
 	u8 mode;
 	u8 cpu_pwm;
 	u8 gpu_pwm;
@@ -762,17 +763,18 @@ struct victus_s_fan_table {
 #define KEEP_ALIVE_DELAY_SECS     90
 
 /* Safe fallback max RPM for boards that don't expose a fan table */
-#define OMEN_MAX_RPM              60
+#define OMEN_CPU_MAX_RPM          60
+#define OMEN_GPU_MAX_RPM          58
 
-static inline u8 rpm_to_pwm(u8 rpm, struct hp_wmi_hwmon_priv *priv)
+static inline u8 rpm_to_pwm(u8 rpm, u8 max_rpm)
 {
-	return fixp_linear_interpolate(0, 0, priv->max_rpm, U8_MAX,
-				       clamp_val(rpm, 0, priv->max_rpm));
+	return fixp_linear_interpolate(0, 0, max_rpm, U8_MAX,
+				       clamp_val(rpm, 0, max_rpm));
 }
 
-static inline u8 pwm_to_rpm(u8 pwm, struct hp_wmi_hwmon_priv *priv)
+static inline u8 pwm_to_rpm(u8 pwm, u8 max_rpm)
 {
-	return fixp_linear_interpolate(0, 0, U8_MAX, priv->max_rpm,
+	return fixp_linear_interpolate(0, 0, U8_MAX, max_rpm,
 				       clamp_val(pwm, 0, U8_MAX));
 }
 
@@ -1073,12 +1075,12 @@ static int hp_wmi_fan_speed_set(struct hp_wmi_hwmon_priv *priv)
 	if (priv->cpu_pwm == HP_FAN_SPEED_AUTOMATIC)
 		fan_speed[CPU_FAN] = HP_FAN_SPEED_AUTOMATIC;
 	else
-		fan_speed[CPU_FAN] = pwm_to_rpm(priv->cpu_pwm, priv);
+		fan_speed[CPU_FAN] = pwm_to_rpm(priv->cpu_pwm, priv->cpu_max_rpm);
 
 	if (priv->gpu_pwm == HP_FAN_SPEED_AUTOMATIC)
 		fan_speed[GPU_FAN] = HP_FAN_SPEED_AUTOMATIC;
 	else
-		fan_speed[GPU_FAN] = pwm_to_rpm(priv->gpu_pwm, priv);
+		fan_speed[GPU_FAN] = pwm_to_rpm(priv->gpu_pwm, priv->gpu_max_rpm);
 
 	ret = hp_wmi_get_fan_count_userdefine_trigger();
 	if (ret < 0)
@@ -2881,7 +2883,7 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 				rpm = hp_wmi_get_active_fan_speed(channel);
 				if (rpm < 0)
 					return rpm;
-				*val = rpm_to_pwm(rpm / 100, priv);
+				*val = rpm_to_pwm(rpm / 100, (channel == GPU_FAN) ? priv->gpu_max_rpm : priv->cpu_max_rpm);
 			} else {
 				/* Fallback: return cached value for legacy OMENs */
 				if (channel == GPU_FAN)
@@ -2921,14 +2923,15 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 		if (attr == hwmon_pwm_input) {
 			/* ensure PWM input is within valid fan speeds */
 			if (hp_wmi_fan_control_supported()) {
-				int rpm = pwm_to_rpm(val, priv);
-				rpm = clamp_val(rpm, priv->min_rpm, priv->max_rpm);
+				u8 max_rpm = (channel == GPU_FAN) ? priv->gpu_max_rpm : priv->cpu_max_rpm;
+				int rpm = pwm_to_rpm(val, max_rpm);
+				rpm = clamp_val(rpm, priv->min_rpm, max_rpm);
 				if (channel == CPU_FAN)
-					priv->cpu_pwm = rpm_to_pwm(rpm, priv);
+					priv->cpu_pwm = rpm_to_pwm(rpm, priv->cpu_max_rpm);
 				else if (channel == GPU_FAN)
-					priv->gpu_pwm = rpm_to_pwm(rpm, priv);
+					priv->gpu_pwm = rpm_to_pwm(rpm, priv->gpu_max_rpm);
 				else
-					priv->cpu_pwm = rpm_to_pwm(rpm, priv);
+					priv->cpu_pwm = rpm_to_pwm(rpm, priv->cpu_max_rpm);
 			} else {
 				u8 clamped = clamp_val(val, 0, 255);
 				if (channel == GPU_FAN)
@@ -2950,10 +2953,10 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 			if (hp_wmi_fan_control_supported()) {
 				cpu_rpm = hp_wmi_get_active_fan_speed(CPU_FAN);
 				if (cpu_rpm >= 0)
-					priv->cpu_pwm = rpm_to_pwm(cpu_rpm / 100, priv);
+					priv->cpu_pwm = rpm_to_pwm(cpu_rpm / 100, priv->cpu_max_rpm);
 				gpu_rpm = hp_wmi_get_active_fan_speed(GPU_FAN);
 				if (gpu_rpm >= 0)
-					priv->gpu_pwm = rpm_to_pwm(gpu_rpm / 100, priv);
+					priv->gpu_pwm = rpm_to_pwm(gpu_rpm / 100, priv->gpu_max_rpm);
 			}
 			priv->mode = PWM_MODE_MANUAL;
 			return hp_wmi_apply_fan_settings(priv);
@@ -3009,7 +3012,7 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 {
 	u8 fan_data[128] = { 0 };
 	struct victus_s_fan_table *fan_table;
-	u8 min_rpm, max_rpm;
+	u8 min_rpm, cpu_max_rpm, gpu_max_rpm;
 	u8 cpu_rpm, gpu_rpm, noise_db;
 	int i, num_entries, ret;
 	int max_val = 0;
@@ -3020,7 +3023,8 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 
 	/* Initialize safe defaults for all devices */
 	priv->min_rpm = 0;
-	priv->max_rpm = OMEN_MAX_RPM;
+	priv->cpu_max_rpm = OMEN_CPU_MAX_RPM;
+	priv->gpu_max_rpm = OMEN_GPU_MAX_RPM;
 	priv->cpu_pwm = 128;
 	priv->gpu_pwm = 128;
 
@@ -3033,7 +3037,8 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 				   &max_val, sizeof(max_val), sizeof(max_val));
 	if (!ret && max_val != 0) {
 		pr_info("HP WMI: Hardware reported Max RPM: %d000\n", max_val);
-		priv->max_rpm = max_val;
+		priv->cpu_max_rpm = max_val;
+		priv->gpu_max_rpm = max_val;
 	}
 
 	/* Bypass devices without fan control support. */
@@ -3043,15 +3048,15 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 	ret = hp_wmi_perform_query(HPWMI_VICTUS_S_GET_FAN_TABLE_QUERY,
 				   HPWMI_GM, &fan_data, 4, sizeof(fan_data));
 	if (ret) {
-		pr_info("HP WMI: Fan table query failed (%d), using max_rpm=%u\n",
-			ret, priv->max_rpm);
+		pr_info("HP WMI: Fan table query failed (%d), using cpu_max_rpm=%u, gpu_max_rpm=%u\n",
+			ret, priv->cpu_max_rpm, priv->gpu_max_rpm);
 		return 0; /* fall back to defaults already set above */
 	}
 
 	fan_table = (struct victus_s_fan_table *)fan_data;
 	if (fan_table->header.num_fans == 0) {
-		pr_info("HP WMI: Fan table reports 0 fans, using max_rpm=%u\n",
-			priv->max_rpm);
+		pr_info("HP WMI: Fan table reports 0 fans, using cpu_max_rpm=%u, gpu_max_rpm=%u\n",
+			priv->cpu_max_rpm, priv->gpu_max_rpm);
 		return 0;
 	}
 
@@ -3059,7 +3064,8 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 	entry_size = sizeof(struct victus_s_fan_table_entry);
 	num_entries = (sizeof(fan_data) - header_size) / entry_size;
 	min_rpm = U8_MAX;
-	max_rpm = 0;
+	cpu_max_rpm = 0;
+	gpu_max_rpm = 0;
 
 	for (i = 0 ; i < num_entries ; i++) {
 		cpu_rpm = fan_table->entries[i].cpu_rpm;
@@ -3075,18 +3081,23 @@ static int hp_wmi_setup_fan_settings(struct hp_wmi_hwmon_priv *priv)
 
 		if (cpu_rpm < min_rpm)
 			min_rpm = cpu_rpm;
-		if (cpu_rpm > max_rpm)
-			max_rpm = cpu_rpm;
+		if (cpu_rpm > cpu_max_rpm)
+			cpu_max_rpm = cpu_rpm;
+		if (gpu_rpm > gpu_max_rpm)
+			gpu_max_rpm = gpu_rpm;
 	}
 
-	if (min_rpm == U8_MAX || max_rpm == 0) {
-		pr_info("HP WMI: Fan table empty after parsing, using max_rpm=%u\n",
-			priv->max_rpm);
+	if (min_rpm == U8_MAX || (cpu_max_rpm == 0 && gpu_max_rpm == 0)) {
+		pr_info("HP WMI: Fan table empty after parsing, using cpu_max_rpm=%u, gpu_max_rpm=%u\n",
+			priv->cpu_max_rpm, priv->gpu_max_rpm);
 		return 0;
 	}
 
 	priv->min_rpm = min_rpm;
-	priv->max_rpm = max_rpm;
+	if (cpu_max_rpm > 0)
+		priv->cpu_max_rpm = cpu_max_rpm;
+	if (gpu_max_rpm > 0)
+		priv->gpu_max_rpm = gpu_max_rpm;
 
 	return 0;
 }

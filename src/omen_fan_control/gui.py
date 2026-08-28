@@ -10,7 +10,7 @@ from PyQt6.QtGui import QIcon
 from . import get_assets_dir, get_data_dir
 from .logic import FanController
 from .fan_curve_widget import FanCurveEditor
-from .gui_widgets import ModernButton, NoFocusDelegate, CoreTempDialog, WorkerThread
+from .gui_widgets import ModernButton, NoFocusDelegate, CoreTempDialog, FanSpeedDialog, WorkerThread
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -52,6 +52,8 @@ class MainWindow(QMainWindow):
         self.rpm_label = QLabel("0 RPM")
         self.rpm_label.setObjectName("HeaderRPM")
         self.rpm_label.setFixedWidth(120)
+        self.rpm_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rpm_label.mousePressEvent = self.show_fan_speeds
         left_layout.addWidget(self.rpm_label)
         
         nav_layout.addLayout(left_layout)
@@ -251,6 +253,7 @@ class MainWindow(QMainWindow):
         #NavBar { background-color: #252526; border-bottom: 1px solid #333; }
         #Title { font-size: 20px; font-weight: bold; color: #fff; background-color: transparent; }
         #HeaderRPM { font-size: 16px; color: #aaa; font-weight: bold; padding-left: 10px; }
+        #HeaderRPM:hover { color: #ffffff; }
         #HeaderTemp { font-size: 16px; color: #d63333; font-weight: bold; padding-right: 10px; }
         #HeaderTemp:hover { color: #ff6666; }
         
@@ -629,8 +632,18 @@ class MainWindow(QMainWindow):
         
         c_layout.addSpacing(20)
         
-        self.cal_result = QLabel("")
-        self.cal_result.setStyleSheet("font-size: 18px; color: #d63333; font-weight: bold;")
+        saved_max = self.controller.config.get("fan_max", 0)
+        saved_fan1 = self.controller.config.get("fan1_max", 0)
+        saved_fan2 = self.controller.config.get("fan2_max", 0)
+        if saved_fan1 > 0 and saved_fan2 > 0 and saved_fan1 != saved_fan2:
+            initial_cal_text = f"Fan 1 (CPU): {saved_fan1} RPM  |  Fan 2 (GPU): {saved_fan2} RPM"
+        elif saved_max > 0:
+            initial_cal_text = f"Max RPM: {saved_max}"
+        else:
+            initial_cal_text = ""
+
+        self.cal_result = QLabel(initial_cal_text)
+        self.cal_result.setStyleSheet("font-size: 16px; color: #d63333; font-weight: bold;")
         self.cal_result.setAlignment(Qt.AlignmentFlag.AlignCenter)
         c_layout.addWidget(self.cal_result, alignment=Qt.AlignmentFlag.AlignCenter)
         
@@ -1026,6 +1039,10 @@ class MainWindow(QMainWindow):
         dlg = CoreTempDialog(self.controller, self)
         dlg.exec()
 
+    def show_fan_speeds(self, event):
+        dlg = FanSpeedDialog(self.controller, self)
+        dlg.exec()
+
     def go_home(self):
         self.stack.setCurrentWidget(self.home_page)
         self.back_btn.setVisible(False)
@@ -1297,6 +1314,7 @@ class MainWindow(QMainWindow):
         self.cal_thread.start()
 
     def stop_calibration(self):
+        print("Stopping calibration...")
         self.cal_running = False
         if hasattr(self, "cal_thread") and self.cal_thread.isRunning():
             self.cal_thread.request_stop()
@@ -1317,7 +1335,7 @@ class MainWindow(QMainWindow):
         self.controller.save_config()
         self.apply_fan_mode()
 
-    def on_cal_finished(self, max_rpm):
+    def on_cal_finished(self, result):
         if not getattr(self, "cal_running", False):
             return
         
@@ -1333,6 +1351,14 @@ class MainWindow(QMainWindow):
         self.controller.config["mode"] = prev_mode
         self.controller.save_config()
 
+        if isinstance(result, (tuple, list)):
+            rpm1, rpm2 = result
+            max_rpm = max(rpm1, rpm2)
+        else:
+            rpm1 = result
+            rpm2 = result
+            max_rpm = result
+
         if max_rpm == 0:
             self.cal_result.setText("Max RPM: 0 (Sensor Unreadable)")
             self.status_label.setText("Calibration returned 0 RPM.")
@@ -1347,10 +1373,21 @@ class MainWindow(QMainWindow):
             )
             QMessageBox.warning(self, "Calibration Result: 0 RPM", warn_msg)
         else:
-            self.cal_result.setText(f"Max RPM: {max_rpm}")
-            self.status_label.setText(f"Calibration done. Max RPM: {max_rpm}")
+            if rpm2 > 0 and rpm1 != rpm2:
+                result_str = f"Fan 1 (CPU): {rpm1} RPM  |  Fan 2 (GPU): {rpm2} RPM"
+                msg_str = (
+                    "Calibration Complete.\n\n"
+                    f"• Fan 1 (CPU) Max: {rpm1} RPM\n"
+                    f"• Fan 2 (GPU) Max: {rpm2} RPM"
+                )
+            else:
+                result_str = f"Max RPM: {max_rpm}"
+                msg_str = f"Calibration Complete.\nMax RPM: {max_rpm}"
+
+            self.cal_result.setText(result_str)
+            self.status_label.setText(f"Calibration done. {result_str}")
             self.apply_fan_mode()
-            QMessageBox.information(self, "Calibration", f"Calibration Complete.\nMax RPM: {max_rpm}")
+            QMessageBox.information(self, "Calibration", msg_str)
 
     def run_driver_task(self, type_, force=False):
         if type_ == "temp":

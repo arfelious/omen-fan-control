@@ -23,9 +23,13 @@ def calibrate() -> None:
                     click.echo(f"Calibrating... {progress}%", nl=False)
                     click.echo("\r", nl=False)
             except StopIteration as e:
-                max_rpm = e.value
+                result = e.value
 
-            click.echo(f"\nCalibration finished. Max RPM: {max_rpm}")
+            if isinstance(result, (tuple, list)):
+                rpm1, rpm2 = result
+                click.echo(f"\nCalibration finished.\n• Fan 1 (CPU) Max: {rpm1} RPM\n• Fan 2 (GPU) Max: {rpm2} RPM")
+            else:
+                click.echo(f"\nCalibration finished. Max RPM: {result}")
 
         finally:
             controller.config["mode"] = prev_mode

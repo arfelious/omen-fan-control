@@ -16,6 +16,8 @@ from ._constants import (
 class ConfigDict(TypedDict, total=False):
     version: int
     fan_max: int
+    fan1_max: int
+    fan2_max: int
     calibration_wait: int
     watchdog_interval: int
     ma_window: int
@@ -61,6 +63,8 @@ class ConfigDict(TypedDict, total=False):
 DEFAULT_CONFIG: ConfigDict = {
     "version": CONFIG_VERSION,
     "fan_max": 0,
+    "fan1_max": 0,
+    "fan2_max": 0,
     "calibration_wait": DEFAULT_CALIBRATION_WAIT,
     "watchdog_interval": DEFAULT_WATCHDOG_INTERVAL,
     "ma_window": 5,

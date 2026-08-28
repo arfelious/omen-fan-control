@@ -145,16 +145,20 @@ class MainWindow(QMainWindow):
             msg.setWindowTitle("Root Privileges Required")
             msg.setText("This application is not running as root.")
             msg.setInformativeText("Most features (fan control, driver installation) require root privileges to function correctly.\n\nIt is recommended to run this application with 'sudo'.")
-            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+            msg.setDefaultButton(QMessageBox.StandardButton.Ok)
             
             chk = QCheckBox("Don't show this again")
             msg.setCheckBox(chk)
             
-            msg.exec()
+            ret = msg.exec()
             
-            if chk.isChecked():
-                self.controller.config["bypass_root_warning"] = True
-                self.controller.save_config()
+            if ret == QMessageBox.StandardButton.Ok:
+                if chk.isChecked():
+                    self.controller.config["bypass_root_warning"] = True
+                    self.controller.save_config()
+            else:
+                sys.exit(0)
 
         if not self.controller.config.get("bypass_patch_warning", False) or self.controller.config.get("debug_experimental_ui", False):
             support_status, board_name = self.controller.check_board_support()

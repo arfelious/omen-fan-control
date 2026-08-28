@@ -2,11 +2,7 @@
 # Copyright (C) 2026 arfelious
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import sys
 from pathlib import Path
-
-# Prevent root-owned bytecode cache files
-sys.dont_write_bytecode = True
 
 __version__ = "1.0.0"
 

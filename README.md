@@ -71,8 +71,6 @@ Install the app in an isolated environment. Driver sources are bundled; you can 
 uv tool install git+https://github.com/arfelious/omen-fan-control.git
 sudo ln -sf "$HOME/.local/bin/omen-fan-control"* /usr/local/bin/
 
-sudo omen-fan-control status
-sudo omen-fan-control-gui
 ```
 
 **Using pipx:**
@@ -80,6 +78,9 @@ sudo omen-fan-control-gui
 pipx install git+https://github.com/arfelious/omen-fan-control.git
 sudo ln -sf "$HOME/.local/bin/omen-fan-control"* /usr/local/bin/
 
+```
+**After installation**
+```bash
 sudo omen-fan-control status
 sudo omen-fan-control-gui
 ```
@@ -292,13 +293,13 @@ This utility is part of an ongoing effort to bring more **OMEN Gaming Hub** feat
 3. **Uninstall Package & Symlinks:**
    * **uv:**
      ```bash
-     sudo rm -f /usr/local/bin/omen-fan-control*
-     uv tool uninstall omen-fan-control 2>/dev/null || sudo rm -rf ~/.local/share/uv/tools/omen-fan-control
+     sudo rm -rf ~/.local/share/uv/tools/omen-fan-control ~/.local/bin/omen-fan-control* /usr/local/bin/omen-fan-control*
      ```
+     >Note: Regular `uv tool remove` will likely fail with permission error  as `.pyc` files will be root-owned
    * **pipx:**
      ```bash
-     sudo rm -f /usr/local/bin/omen-fan-control*
      pipx uninstall omen-fan-control
+     sudo rm -f /usr/local/bin/omen-fan-control*
      ```
    * **Arch:** `sudo pacman -R omen-fan-control`
    * **Debian:** `sudo apt remove omen-fan-control`

@@ -289,9 +289,17 @@ This utility is part of an ongoing effort to bring more **OMEN Gaming Hub** feat
    ```
    This restores the original `.ko` files from the backups created during installation.
 
-3. **Uninstall Package:**
-   * **pipx:** `pipx uninstall omen-fan-control`
-   * **uv:** `uv tool uninstall omen-fan-control`
+3. **Uninstall Package & Symlinks:**
+   * **uv:**
+     ```bash
+     sudo rm -f /usr/local/bin/omen-fan-control*
+     uv tool uninstall omen-fan-control 2>/dev/null || sudo rm -rf ~/.local/share/uv/tools/omen-fan-control
+     ```
+   * **pipx:**
+     ```bash
+     sudo rm -f /usr/local/bin/omen-fan-control*
+     pipx uninstall omen-fan-control
+     ```
    * **Arch:** `sudo pacman -R omen-fan-control`
    * **Debian:** `sudo apt remove omen-fan-control`
 

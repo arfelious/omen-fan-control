@@ -1,4 +1,5 @@
 obj-m += hp-wmi.o
+ccflags-y += -Wno-declaration-after-statement
 
 KVERSION ?= $(shell uname -r)
 KERNEL_BUILD ?= /lib/modules/$(KVERSION)/build

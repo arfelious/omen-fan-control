@@ -329,13 +329,14 @@ class MainWindow(QMainWindow):
         QPushButton[class="menu"]:hover { background-color: #3e3e42; border-color: #d63333; }
         
         QComboBox { 
-            padding: 2px;
+            padding: 4px 8px;
             font-size: 14px; 
             background-color: #333; 
             color: white; 
             border: 1px solid #555; 
-            border-radius: 3px; 
+            border-radius: 4px; 
             min-width: 150px; 
+            min-height: 28px;
         }
         QComboBox:focus { border: 1px solid #777; }
         
@@ -493,11 +494,11 @@ class MainWindow(QMainWindow):
         self.fan_target_widget.setVisible(False)
         
         self.mode_container = container = QFrame()
-        container.setStyleSheet("background-color: #252526; border-radius: 10px; padding: 10px 15px;")
+        container.setStyleSheet("background-color: #252526; border-radius: 10px;")
         container.setFixedWidth(600)
         c_layout = QVBoxLayout(container)
-        c_layout.setSpacing(4)
-        c_layout.setContentsMargins(0, 0, 0, 0)
+        c_layout.setSpacing(16)
+        c_layout.setContentsMargins(15, 12, 15, 12)
         
         mode_layout = QHBoxLayout()
         mode_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -510,6 +511,7 @@ class MainWindow(QMainWindow):
         self.mode_combo.setView(QListView()) # Force standard list view for consistent styling
         self.mode_combo.setItemDelegate(NoFocusDelegate()) # Fix focus rect artifact
         self.mode_combo.addItems(["Auto", "Max", "Manual", "Curve"])
+        self.mode_combo.setFixedHeight(36)
         self.mode_combo.currentTextChanged.connect(self.on_mode_change)
         mode_layout.addWidget(self.mode_combo)
         
@@ -527,10 +529,12 @@ class MainWindow(QMainWindow):
         self.manual_widget = QWidget()
         manual_outer_layout = QVBoxLayout(self.manual_widget)
         manual_outer_layout.setContentsMargins(0, 5, 0, 0)
+        manual_outer_layout.setSpacing(4)
         
         manual_row = QWidget()
         manual_row_layout = QHBoxLayout(manual_row)
         manual_row_layout.setContentsMargins(0, 0, 0, 0)
+        manual_row_layout.setSpacing(10)
         manual_row_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         manual_row_layout.addWidget(QLabel("Manual Speed (0-100%):"))
@@ -538,8 +542,9 @@ class MainWindow(QMainWindow):
         self.manual_spin.setRange(0, 100)
         self.manual_spin.setSingleStep(5)
         self.manual_spin.setValue(50)
-        self.manual_spin.setFixedHeight(40) 
-        self.manual_spin.setStyleSheet("padding: 8px")
+        self.manual_spin.setFixedWidth(80)
+        self.manual_spin.setFixedHeight(30)
+        self.manual_spin.setStyleSheet("padding: 2px 4px;")
         self.manual_spin.valueChanged.connect(self.on_manual_changed)
         manual_row_layout.addWidget(self.manual_spin)
         

@@ -1241,9 +1241,12 @@ class MainWindow(QMainWindow):
              
         svc_layout.addWidget(self.svc_btn)
         
-        self.svc_restart_btn = QPushButton("Restart Service")
+        is_running = self.controller.is_service_running()
+        btn_text = "Restart Service" if is_running else "Start Service"
+        btn_bg = "#f57c00" if is_running else "#2e7d32"
+        self.svc_restart_btn = QPushButton(btn_text)
         self.svc_restart_btn.setFixedWidth(150)
-        self.svc_restart_btn.setStyleSheet("background-color: #f57c00; color: white;")
+        self.svc_restart_btn.setStyleSheet(f"background-color: {btn_bg}; color: white;")
         self.svc_restart_btn.clicked.connect(self.restart_service_request)
         self.svc_restart_btn.setVisible(self.controller.is_service_installed())
         
@@ -2148,6 +2151,9 @@ class MainWindow(QMainWindow):
             if running:
                 self.svc_status_label.setText("Service: Active")
                 self.svc_status_label.setStyleSheet("color: #4caf50; font-weight: bold;") # Green
+                if hasattr(self, 'svc_restart_btn'):
+                    self.svc_restart_btn.setText("Restart Service")
+                    self.svc_restart_btn.setStyleSheet("background-color: #f57c00; color: white;")
                 
                 # Stop local loop if service is running
                 if hasattr(self, 'curve_timer') and self.curve_timer.isActive():
@@ -2155,32 +2161,44 @@ class MainWindow(QMainWindow):
             else:
                 self.svc_status_label.setText("Service: Inactive")
                 self.svc_status_label.setStyleSheet("color: #ff9800; font-weight: bold;") # Orange
+                if hasattr(self, 'svc_restart_btn'):
+                    self.svc_restart_btn.setText("Start Service")
+                    self.svc_restart_btn.setStyleSheet("background-color: #2e7d32; color: white;")
                 
                 # Resume local loop if in Curve mode and service is not running
                 if self.mode_combo.currentText() == "Curve" and not (hasattr(self, 'curve_timer') and self.curve_timer.isActive()):
                     self.start_curve_loop()
 
     def restart_service_request(self):
-        self.svc_status_label.setText("Restarting Service...")
+        running = self.controller.is_service_running()
+        action_name = "Restarting" if running else "Starting"
+        action_past = "restarted" if running else "started"
+        target_fn = self.controller.restart_service if running else self.controller.start_service
+
+        self.svc_status_label.setText(f"{action_name} Service...")
         self.svc_status_label.setStyleSheet("color: #ff9800; font-weight: bold;")
         self.svc_restart_btn.setEnabled(False)
         self.svc_btn.setEnabled(False)
         
-        self.restart_thread = WorkerThread(self.controller.restart_service)
-        self.restart_thread.finished.connect(self.on_svc_restart_finished)
+        self.restart_thread = WorkerThread(target_fn)
+        self.restart_thread.finished.connect(lambda res: self.on_svc_action_finished(res, action_past))
         self.restart_thread.start()
 
-    def on_svc_restart_finished(self, result):
+    def on_svc_action_finished(self, result, action_past="restarted"):
         self.svc_restart_btn.setEnabled(True)
         self.svc_btn.setEnabled(True)
         success, msg = result
         if success:
              self.check_service_status()
-             QMessageBox.information(self, "Service", "Service successfully restarted.")
+             QMessageBox.information(self, "Service", f"Service successfully {action_past}.")
         else:
-             self.svc_status_label.setText("Restart Failed")
+             self.svc_status_label.setText(f"{action_past.capitalize()} Failed")
              self.svc_status_label.setStyleSheet("color: #d63333; font-weight: bold;")
+             self.check_service_status()
              QMessageBox.critical(self, "Service Error", msg)
+
+    def on_svc_restart_finished(self, result):
+        self.on_svc_action_finished(result, "restarted")
 
     def toggle_stress_test(self, checked):
         if checked:

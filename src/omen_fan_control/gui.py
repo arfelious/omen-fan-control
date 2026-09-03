@@ -4,7 +4,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QLabel, QFrame, QStackedWidget,
                             QComboBox, QSpinBox, QMessageBox, QFileDialog,
                             QProgressBar, QListView, QTextEdit,
-                            QCheckBox, QLineEdit, QGridLayout)
+                            QCheckBox, QLineEdit, QGridLayout,
+                            QButtonGroup, QStackedLayout, QGraphicsOpacityEffect)
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 from . import get_assets_dir, get_data_dir
@@ -24,11 +25,14 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(icon_path)))
         
         self.controller = FanController()
+        self.legacy_fan_max_present = "fan_max" in self.controller.config
+        self.legacy_manual_max_present = "manual_max_rpm" in self.controller.config
         self.watchdog_timer = QTimer()
         self.watchdog_timer.timeout.connect(self.run_watchdog)
         
         self.temp_history = []
         self.temp_history_len = self.controller.config.get("ma_window", 5)
+        self.current_target_fan = "cpu"
         
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -226,6 +230,35 @@ class MainWindow(QMainWindow):
                 if self.controller.config.get("debug_experimental_ui"):
                      print("Debug experimental UI shown.")
 
+        if self.legacy_fan_max_present:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Recalibration Needed")
+            msg.setText("Recalibration is needed for independent fan control.")
+            msg.setInformativeText(
+                "Your configuration contains a legacy single max fan speed setting.\n\n"
+                "You need to recalibrate in order to be able to measure different max RPMs for fans."
+            )
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()
+
+        if self.legacy_manual_max_present:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Independent Fan Speeds Available")
+            msg.setText("CPU and GPU fans can now be set to different max speeds.")
+            msg.setInformativeText(
+                "Your configuration contains a legacy single Manual Max RPM setting.\n\n"
+                "You can now set distinct maximum RPM values for CPU and GPU fans independently in Options."
+            )
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()
+
+        if self.legacy_fan_max_present or self.legacy_manual_max_present:
+            self.controller.config.pop("fan_max", None)
+            self.controller.config.pop("manual_max_rpm", None)
+            self.controller.save_config()
+
     def update_cursors(self):
         """Sets pointing hand cursor for non-destructive interactive elements."""
         for widget in self.findChildren((QPushButton, QComboBox, QCheckBox, QSpinBox)):
@@ -417,6 +450,48 @@ class MainWindow(QMainWindow):
         
         layout.addStretch()
         
+        # Target selector: CPU Fan / GPU Fan (active when Custom GPU Fan Configuration is chosen)
+        self.fan_target_widget = QWidget()
+        self.fan_target_widget.setToolTip("Fan Control Strategy can be set to Percentage based in Settings to control both fans with a single configuration.")
+        target_layout = QHBoxLayout(self.fan_target_widget)
+        target_layout.setContentsMargins(0, 0, 0, 4)
+        target_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        lbl_target = QLabel("Currently Configuring:")
+        lbl_target.setStyleSheet("font-size: 13px; font-weight: bold; color: #aaa; margin-right: 6px;")
+        target_layout.addWidget(lbl_target)
+        
+        self.target_cpu_btn = QPushButton("CPU Fan")
+        self.target_cpu_btn.setCheckable(True)
+        self.target_cpu_btn.setChecked(True)
+        self.target_cpu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.target_cpu_btn.setFixedWidth(90)
+        self.target_cpu_btn.setStyleSheet("""
+            QPushButton { background-color: #333; color: #bbb; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; font-weight: bold; }
+            QPushButton:checked { background-color: #d63333; color: white; border: 1px solid #ff4444; }
+        """)
+        self.target_cpu_btn.clicked.connect(lambda: self.set_configuring_target("cpu"))
+        target_layout.addWidget(self.target_cpu_btn)
+        
+        self.target_gpu_btn = QPushButton("GPU Fan")
+        self.target_gpu_btn.setCheckable(True)
+        self.target_gpu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.target_gpu_btn.setFixedWidth(90)
+        self.target_gpu_btn.setStyleSheet("""
+            QPushButton { background-color: #333; color: #bbb; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; font-weight: bold; }
+            QPushButton:checked { background-color: #0091ea; color: white; border: 1px solid #00b0ff; }
+        """)
+        self.target_gpu_btn.clicked.connect(lambda: self.set_configuring_target("gpu"))
+        target_layout.addWidget(self.target_gpu_btn)
+        
+        self.fan_target_group = QButtonGroup(self)
+        self.fan_target_group.addButton(self.target_cpu_btn)
+        self.fan_target_group.addButton(self.target_gpu_btn)
+        self.fan_target_group.setExclusive(True)
+        
+        layout.addWidget(self.fan_target_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.fan_target_widget.setVisible(False)
+        
         self.mode_container = container = QFrame()
         container.setStyleSheet("background-color: #252526; border-radius: 10px; padding: 10px 15px;")
         container.setFixedWidth(600)
@@ -489,11 +564,11 @@ class MainWindow(QMainWindow):
         self.curve_editor_container = QWidget()
         self.curve_editor_container.setFixedHeight(360)
         curve_layout = QVBoxLayout(self.curve_editor_container)
-        curve_layout.setContentsMargins(0, 5, 0, 5)
+        curve_layout.setContentsMargins(20, 5, 20, 5)
         curve_header = QHBoxLayout()
-        lbl_curve_title = QLabel("Fan Curve Editor")
-        lbl_curve_title.setToolTip("Controls:\n• Left-Click Drag: Move Point\n• Right-Click: Add New Point\n• Middle-Click: Remove Point")
-        curve_header.addWidget(lbl_curve_title)
+        self.lbl_curve_title = QLabel("Fan Curve Editor")
+        self.lbl_curve_title.setToolTip("Controls:\n• Left-Click Drag: Move Point\n• Right-Click: Add New Point\n• Middle-Click: Remove Point")
+        curve_header.addWidget(self.lbl_curve_title)
         
         lbl_hint = QLabel("(Right-click: Add | Middle-click: Remove)")
         lbl_hint.setStyleSheet("color: #777; font-size: 11px; margin-left: 8px;")
@@ -767,28 +842,32 @@ class MainWindow(QMainWindow):
         self.loglevel_combo.currentTextChanged.connect(self.save_options)
         form_grid.addWidget(self.loglevel_combo, 3, 1, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
+        # Bypass Options Row (Side by Side)
+        bypass_row = QWidget()
+        bypass_layout = QHBoxLayout(bypass_row)
+        bypass_layout.setContentsMargins(0, 0, 0, 0)
+        bypass_layout.setSpacing(20)
+
         self.bypass_check = QCheckBox("Bypass Driver Patch Warning")
         self.bypass_check.setChecked(self.controller.config.get("bypass_patch_warning", False))
         self.bypass_check.toggled.connect(self.save_options)
         self.bypass_check.toggled.connect(lambda: self.controller.save_config())
-        form_grid.addWidget(self.bypass_check, 4, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        bypass_layout.addWidget(self.bypass_check)
 
         self.bypass_root_check = QCheckBox("Bypass Root Warning")
         self.bypass_root_check.setChecked(self.controller.config.get("bypass_root_warning", False))
         self.bypass_root_check.toggled.connect(self.save_options)
         self.bypass_root_check.toggled.connect(lambda: self.controller.save_config())
-        form_grid.addWidget(self.bypass_root_check, 5, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        bypass_layout.addWidget(self.bypass_root_check)
+        bypass_layout.addStretch()
 
-        self.shutdown_hook_check = QCheckBox("Enable Fan Cleanup on Shutdown (Set to 30%)")
-        self.shutdown_hook_check.setToolTip("Creates a systemd shutdown hook to ensure fans are reset to a quiet 30% speed\nwhen shutting down or rebooting. Prevents fans being stuck at high speed\nuntil the service is back up")
-        self.shutdown_hook_check.setChecked(self.controller.is_shutdown_service_enabled())
-        self.shutdown_hook_check.toggled.connect(self.toggle_shutdown_hook)
-        form_grid.addWidget(self.shutdown_hook_check, 6, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form_grid.addWidget(bypass_row, 4, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         # Experimental Support Section
         exp_group = QWidget()
         exp_layout = QVBoxLayout(exp_group)
-        exp_layout.setContentsMargins(0, 10, 0, 0)
+        exp_layout.setContentsMargins(0, 0, 0, 0)
+        exp_layout.setSpacing(4)
         
         self.exp_check = QCheckBox("Enable Experimental List Support")
         self.exp_check.setStyleSheet("color: #ff9800; font-weight: bold;")
@@ -804,7 +883,7 @@ class MainWindow(QMainWindow):
         if supp_status == "SUPPORTED":
             self.exp_check.setEnabled(True)
             self.exp_check.setToolTip("WARNING: Your board is already officially supported. <br>Forcing experimental mode override may cause conflicts or instability. This setting is not recommended for your board.")
-            self.exp_check.setStyleSheet("color: #ffa500;") # Orange warning color? Or keep standard? Let's leave clear warning style if possible, or just tooltip.
+            self.exp_check.setStyleSheet("color: #ffa500;")
             
         elif supp_status == "UNSUPPORTED":
              self.exp_check.setEnabled(False)
@@ -851,79 +930,244 @@ class MainWindow(QMainWindow):
         
         exp_layout.addWidget(self.exp_options_widget)
         
-        form_grid.addWidget(exp_group, 6, 0, 1, 2)
+        form_grid.addWidget(exp_group, 5, 0, 1, 2)
         
         # Init visibility
-        self.toggle_experimental_options(self.exp_check.isChecked())
+        self.exp_options_widget.setVisible(self.exp_check.isChecked())
 
-        # 4. Manual Max Fan Speed (Calibration Bypass)
-        manual_max_box = QVBoxLayout()
-        manual_max_box.setSpacing(3)
+        # 4. Advanced Fan Control Group
+        adv_box = QVBoxLayout()
+        adv_box.setSpacing(6)
 
-        input_row = QHBoxLayout()
-        self.manual_max_check = QCheckBox("Use Manual Max RPM (Bypass Calibration)")
-        self.manual_max_check.setToolTip("Allows setting a manual Max Fan RPM (e.g. 5800 RPM) to patch the driver without needing live calibration.")
-        self.manual_max_check.setChecked(self.controller.config.get("use_manual_max_rpm", False))
-        self.manual_max_check.toggled.connect(self.toggle_manual_max_rpm)
-        input_row.addWidget(self.manual_max_check)
+        # Master Enable Checkbox
+        self.adv_fan_check = QCheckBox("Use advanced fan control options")
+        self.adv_fan_check.setStyleSheet("font-weight: bold; font-size: 13px;")
+        self.adv_fan_check.setChecked(self.controller.config.get("use_advanced_fan_control", False))
+        self.adv_fan_check.toggled.connect(self.toggle_advanced_fan_control)
+        adv_box.addWidget(self.adv_fan_check)
 
-        self.manual_max_spin = QSpinBox()
-        self.manual_max_spin.setRange(4000, 7000)
-        self.manual_max_spin.setSingleStep(100)
-        self.manual_max_spin.setFixedWidth(80)
-        self.manual_max_spin.setValue(self.controller.config.get("manual_max_rpm", 5800))
-        self.manual_max_spin.setEnabled(self.manual_max_check.isChecked())
-        self.manual_max_spin.valueChanged.connect(self.on_manual_max_spin_changed)
-        input_row.addWidget(self.manual_max_spin)
+        # Controls Card Container
+        self.adv_controls_widget = QFrame()
+        self.adv_controls_widget.setObjectName("advControlsCard")
+        self.adv_opacity_effect = QGraphicsOpacityEffect(self.adv_controls_widget)
+        self.adv_controls_widget.setGraphicsEffect(self.adv_opacity_effect)
+
+        adv_sub_layout = QVBoxLayout(self.adv_controls_widget)
+        adv_sub_layout.setContentsMargins(14, 12, 14, 12)
+        adv_sub_layout.setSpacing(8)
+
+        # Dropdown 1: Max Fan Speed Strategy
+        row_strat = QHBoxLayout()
+        row_strat.setSpacing(8)
+        lbl_strat = QLabel("Max Fan Speed:")
+        lbl_strat.setStyleSheet("font-weight: bold;")
+        row_strat.addWidget(lbl_strat)
+
+        self.max_strategy_combo = QComboBox()
+        self.max_strategy_combo.setView(QListView())
+        self.max_strategy_combo.setItemDelegate(NoFocusDelegate())
+        self.max_strategy_combo.addItems([
+            "Use calibration value",
+            "Use Omen Gaming Hub Defaults",
+            "Use custom maximum rpm values"
+        ])
+        strat_map = {"calibration": 0, "omen_defaults": 1, "custom": 2}
+        cur_strat = self.controller.config.get("max_fan_speed_strategy", "calibration")
+        self.max_strategy_combo.setCurrentIndex(strat_map.get(cur_strat, 0))
+        self.max_strategy_combo.currentIndexChanged.connect(self.on_max_strategy_changed)
+        row_strat.addWidget(self.max_strategy_combo)
+
+        self.win_cfg_import_btn = QPushButton("Import from Windows Drive")
+        self.win_cfg_import_btn.setToolTip("Import CleanCreek fan settings and Max Fan RPM from Windows PowerControlConfig.json or mount directory.")
+        self.win_cfg_import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.win_cfg_import_btn.setStyleSheet("""
+            QPushButton { background-color: #0e639c; color: white; font-weight: bold; padding: 4px 10px; border-radius: 4px; border: 1px solid #1177bb; font-size: 11px; }
+            QPushButton:hover { background-color: #1177bb; }
+        """)
+        self.win_cfg_import_btn.clicked.connect(self.import_windows_config_dialog)
+        row_strat.addWidget(self.win_cfg_import_btn)
+
+        row_strat.addStretch()
+        adv_sub_layout.addLayout(row_strat)
+
+        # Custom Spinboxes Row (shown ONLY when "Use custom maximum rpm values" is chosen, placed below dropdown)
+        self.custom_max_row_widget = QWidget()
+        row_custom = QHBoxLayout(self.custom_max_row_widget)
+        row_custom.setContentsMargins(15, 0, 0, 0)
+        row_custom.setSpacing(8)
+
+        self.manual_cpu_lbl = QLabel("CPU:")
+        self.manual_cpu_lbl.setStyleSheet("font-weight: bold;")
+        row_custom.addWidget(self.manual_cpu_lbl)
+
+        self.manual_cpu_spin = QSpinBox()
+        self.manual_cpu_spin.setRange(3000, 8000)
+        self.manual_cpu_spin.setSingleStep(100)
+        self.manual_cpu_spin.setFixedWidth(80)
+        self.manual_cpu_spin.setFixedHeight(28)
+        self.manual_cpu_spin.setStyleSheet("padding: 2px 4px;")
+        self.manual_cpu_spin.setValue(self.controller.config.get("manual_cpu_max_rpm", 6000))
+        self.manual_cpu_spin.valueChanged.connect(self.on_manual_max_spin_changed)
+        row_custom.addWidget(self.manual_cpu_spin)
+
+        self.manual_gpu_lbl = QLabel("GPU:")
+        self.manual_gpu_lbl.setStyleSheet("font-weight: bold; margin-left: 6px;")
+        row_custom.addWidget(self.manual_gpu_lbl)
+
+        self.manual_gpu_spin = QSpinBox()
+        self.manual_gpu_spin.setRange(3000, 8000)
+        self.manual_gpu_spin.setSingleStep(100)
+        self.manual_gpu_spin.setFixedWidth(80)
+        self.manual_gpu_spin.setFixedHeight(28)
+        self.manual_gpu_spin.setStyleSheet("padding: 2px 4px;")
+        self.manual_gpu_spin.setValue(self.controller.config.get("manual_gpu_max_rpm", 5800))
+        self.manual_gpu_spin.valueChanged.connect(self.on_manual_max_spin_changed)
+        row_custom.addWidget(self.manual_gpu_spin)
 
         self.manual_max_save_btn = QPushButton("Save")
-        self.manual_max_save_btn.setFixedWidth(60)
+        self.manual_max_save_btn.setFixedWidth(55)
+        self.manual_max_save_btn.setFixedHeight(28)
         self.manual_max_save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.manual_max_save_btn.setStyleSheet("""
             QPushButton { background-color: #3a3a3c; color: white; font-weight: bold; border-radius: 4px; padding: 4px; border: 1px solid #555; }
             QPushButton:hover { background-color: #4a4a4c; border: 1px solid #777; }
         """)
-        self.manual_max_save_btn.setEnabled(self.manual_max_check.isChecked())
         self.manual_max_save_btn.clicked.connect(self.save_manual_max_rpm)
-        input_row.addWidget(self.manual_max_save_btn)
-        input_row.addStretch()
+        row_custom.addWidget(self.manual_max_save_btn)
+        row_custom.addStretch()
 
-        manual_max_box.addLayout(input_row)
+        adv_sub_layout.addWidget(self.custom_max_row_widget)
+
+        # Labels row under Strategy: Match Source + Warnings
+        labels_layout = QVBoxLayout()
+        labels_layout.setSpacing(2)
 
         self.manual_max_source_lbl = QLabel("")
-        self.manual_max_source_lbl.setStyleSheet("margin-left: 24px; font-size: 11px;")
-        manual_max_box.addWidget(self.manual_max_source_lbl)
+        self.manual_max_source_lbl.setStyleSheet("font-size: 11px;")
+        labels_layout.addWidget(self.manual_max_source_lbl)
 
-        form_grid.addLayout(manual_max_box, 7, 0, 1, 2)
+        self.driver_reinstall_warning_lbl = QLabel("⚠️ These maximum values will be applied after reinstalling the driver.")
+        self.driver_reinstall_warning_lbl.setStyleSheet("color: #ff9800; font-size: 11px; font-weight: bold;")
+        self.driver_reinstall_warning_lbl.setVisible(False)
+        labels_layout.addWidget(self.driver_reinstall_warning_lbl)
 
-        # 5. Windows OMEN Config & Settings Backup Group (Symmetrical Layout)
-        btn_group_box = QVBoxLayout()
-        btn_group_box.setSpacing(10)
+        self.over_ceiling_warning_lbl = QLabel("⚠️ Warning: Selected RPM exceeds detected hardware limits.")
+        self.over_ceiling_warning_lbl.setStyleSheet("color: #f44336; font-size: 11px; font-weight: bold;")
+        self.over_ceiling_warning_lbl.setVisible(False)
+        labels_layout.addWidget(self.over_ceiling_warning_lbl)
 
-        self.get_win_cfg_btn = QPushButton("Get Configuration from Windows")
-        self.get_win_cfg_btn.setToolTip("Import CleanCreek fan settings and Max Fan RPM from Windows PowerControlConfig.json or mount directory.")
-        self.get_win_cfg_btn.setStyleSheet("background-color: #0e639c; font-weight: bold; padding: 9px; border-radius: 4px; color: white;")
-        self.get_win_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.get_win_cfg_btn.clicked.connect(self.import_windows_config_dialog)
-        btn_group_box.addWidget(self.get_win_cfg_btn)
+        adv_sub_layout.addLayout(labels_layout)
 
-        backup_box = QHBoxLayout()
-        backup_box.setSpacing(12)
+        # Dropdown 2: Fan Control Strategy
+        row_method = QHBoxLayout()
+        row_method.setSpacing(8)
+        lbl_method = QLabel("Fan Control Strategy:")
+        lbl_method.setStyleSheet("font-weight: bold;")
+        row_method.addWidget(lbl_method)
 
-        self.export_cfg_btn = QPushButton("Export Settings JSON")
-        self.export_cfg_btn.setStyleSheet("background-color: #333; padding: 8px; border-radius: 4px; color: white;")
-        self.export_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.export_cfg_btn.clicked.connect(self.export_settings_dialog)
-        backup_box.addWidget(self.export_cfg_btn, 1)
+        self.method_combo = QComboBox()
+        self.method_combo.setView(QListView())
+        self.method_combo.view().setMouseTracking(True)
+        self.method_combo.setItemDelegate(NoFocusDelegate())
+        self.method_combo.addItems([
+            "Percentage based",
+            "Asymmetrical",
+            "Custom GPU Fan Configuration"
+        ])
+        self.method_combo.setItemData(
+            0,
+            "Calculates target fan percentage from the temperature curve and applies identical speed to both CPU and GPU fans.",
+            Qt.ItemDataRole.ToolTipRole
+        )
+        self.method_combo.setItemData(
+            1,
+            "Derives CPU fan speed from the temperature curve and offsets GPU fan speed by a configurable RPM difference.",
+            Qt.ItemDataRole.ToolTipRole
+        )
+        self.method_combo.setItemData(
+            2,
+            "Enables independent fan curves and temperature evaluation for the CPU fan and GPU fan.",
+            Qt.ItemDataRole.ToolTipRole
+        )
+        method_map = {"percentage": 0, "asymmetrical": 1, "custom_gpu": 2}
+        cur_method = self.controller.config.get("fan_control_method", "percentage")
+        self.method_combo.setCurrentIndex(method_map.get(cur_method, 0))
+        cur_tip = self.method_combo.itemData(self.method_combo.currentIndex(), Qt.ItemDataRole.ToolTipRole)
+        if cur_tip:
+            self.method_combo.setToolTip(cur_tip)
+        self.method_combo.currentIndexChanged.connect(self.on_method_changed)
+        row_method.addWidget(self.method_combo)
+        row_method.addStretch()
+        adv_sub_layout.addLayout(row_method)
 
-        self.import_cfg_btn = QPushButton("Import Settings JSON")
-        self.import_cfg_btn.setStyleSheet("background-color: #333; padding: 8px; border-radius: 4px; color: white;")
-        self.import_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.import_cfg_btn.clicked.connect(self.import_settings_dialog)
-        backup_box.addWidget(self.import_cfg_btn, 1)
+        # Fixed-Height Container
+        self.method_context_widget = QWidget()
+        self.method_context_widget.setFixedHeight(36)
+        self.method_context_layout = QStackedLayout(self.method_context_widget)
+        self.method_context_layout.setContentsMargins(0, 0, 0, 0)
 
-        btn_group_box.addLayout(backup_box)
-        form_grid.addLayout(btn_group_box, 8, 0, 1, 2)
+        # Sub-panel 0: Percentage
+        panel_percent = QWidget()
+        layout_p = QHBoxLayout(panel_percent)
+        layout_p.setContentsMargins(0, 0, 0, 0)
+        layout_p.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        lbl_p = QLabel("(Both fans are synchronized to the same speed percentage)")
+        lbl_p.setStyleSheet("color: #777; font-size: 11px; font-style: italic;")
+        layout_p.addWidget(lbl_p)
+        layout_p.addStretch()
+        self.method_context_layout.addWidget(panel_percent)
+
+        # Sub-panel 1: Asymmetrical
+        panel_asym = QWidget()
+        layout_a = QHBoxLayout(panel_asym)
+        layout_a.setContentsMargins(0, 0, 0, 0)
+        layout_a.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        layout_a.setSpacing(8)
+        lbl_a_offset = QLabel("GPU Offset (RPM):")
+        lbl_a_offset.setStyleSheet("font-weight: bold; font-size: 11px;")
+        layout_a.addWidget(lbl_a_offset)
+
+        self.asym_offset_spin = QSpinBox()
+        self.asym_offset_spin.setRange(-1500, 1500)
+        self.asym_offset_spin.setSingleStep(50)
+        self.asym_offset_spin.setFixedWidth(80)
+        self.asym_offset_spin.setFixedHeight(28)
+        self.asym_offset_spin.setStyleSheet("padding: 2px 4px;")
+        self.asym_offset_spin.setValue(self.controller.config.get("asymmetrical_offset_rpm", 200))
+        self.asym_offset_spin.valueChanged.connect(self.on_asym_offset_changed)
+        layout_a.addWidget(self.asym_offset_spin)
+
+        self.asym_desc_lbl = QLabel("")
+        self.asym_desc_lbl.setStyleSheet("color: #00b0ff; font-size: 11px; font-weight: bold;")
+        layout_a.addWidget(self.asym_desc_lbl)
+        layout_a.addStretch()
+        self.method_context_layout.addWidget(panel_asym)
+
+        # Sub-panel 2: Custom GPU
+        panel_gpu = QWidget()
+        layout_g = QHBoxLayout(panel_gpu)
+        layout_g.setContentsMargins(0, 0, 0, 0)
+        layout_g.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.gpu_temp_check = QCheckBox("Use GPU temperature for the GPU Fan Configuration")
+        self.gpu_temp_check.setStyleSheet("font-size: 11px;")
+        self.gpu_temp_check.setToolTip("When checked, GPU fan curve evaluates against GPU temperature (with fallback to reference sensor if 0°C). When unchecked, evaluates against the reference sensor chosen in the header pill.")
+        self.gpu_temp_check.setChecked(self.controller.config.get("gpu_curve_use_gpu_temp", True))
+        self.gpu_temp_check.toggled.connect(self.on_gpu_temp_check_toggled)
+        layout_g.addWidget(self.gpu_temp_check)
+        layout_g.addStretch()
+        self.method_context_layout.addWidget(panel_gpu)
+
+        adv_sub_layout.addWidget(self.method_context_widget)
+
+        adv_box.addWidget(self.adv_controls_widget)
+        form_grid.addLayout(adv_box, 6, 0, 1, 2)
+
+        # Initial visual sync for advanced options
+        self.adv_controls_widget.setEnabled(self.adv_fan_check.isChecked())
+        self.update_adv_controls_visual_state(self.adv_fan_check.isChecked())
+        self.method_context_layout.setCurrentIndex(method_map.get(cur_method, 0))
+        self.on_asym_offset_changed(self.asym_offset_spin.value())
+        self.update_max_strategy_ui_state()
 
         self.update_manual_max_source_label()
         
@@ -931,8 +1175,32 @@ class MainWindow(QMainWindow):
         
         layout.addStretch()
         
+        # Bottom Controls Group
         bottom_layout = QVBoxLayout()
         bottom_layout.setSpacing(10)
+        bottom_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        backup_widget = QWidget()
+        backup_box = QHBoxLayout(backup_widget)
+        backup_box.setContentsMargins(0, 0, 0, 0)
+        backup_box.setSpacing(12)
+        backup_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.export_cfg_btn = QPushButton("Export Settings JSON")
+        self.export_cfg_btn.setFixedWidth(200)
+        self.export_cfg_btn.setStyleSheet("background-color: #333; padding: 8px; border-radius: 4px; color: white;")
+        self.export_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.export_cfg_btn.clicked.connect(self.export_settings_dialog)
+        backup_box.addWidget(self.export_cfg_btn)
+
+        self.import_cfg_btn = QPushButton("Import Settings JSON")
+        self.import_cfg_btn.setFixedWidth(200)
+        self.import_cfg_btn.setStyleSheet("background-color: #333; padding: 8px; border-radius: 4px; color: white;")
+        self.import_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.import_cfg_btn.clicked.connect(self.import_settings_dialog)
+        backup_box.addWidget(self.import_cfg_btn)
+
+        bottom_layout.addWidget(backup_widget, alignment=Qt.AlignmentFlag.AlignCenter)
         
         self.bios_btn = QPushButton("Disable BIOS Fan Control")
         self.bios_btn.setFixedWidth(250)
@@ -945,11 +1213,12 @@ class MainWindow(QMainWindow):
         
         warn = QLabel("Warning: This writes directly to EC registers (0x62/0x63). Use at own risk.\n(Usually not necessary as driver handles overrides)")
         warn.setStyleSheet("color: #888; font-size: 11px;")
+        warn.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom_layout.addWidget(warn, alignment=Qt.AlignmentFlag.AlignCenter)
         
         layout.addLayout(bottom_layout)
         
-        layout.addSpacing(60)
+        layout.addSpacing(30)
         
         svc_layout = QHBoxLayout()
         svc_layout.addStretch()
@@ -1053,10 +1322,15 @@ class MainWindow(QMainWindow):
         self.back_btn.setVisible(True)
         self.title_label.setText(title)
 
-    def show_fan_control(self): self.show_page(self.fan_page, "Fan Control")
+    def show_fan_control(self):
+        self.update_fan_target_toggle_visibility()
+        self.show_page(self.fan_page, "Fan Control")
+
     def show_calibration(self): self.show_page(self.stack.widget(2), "Calibration")
     def show_driver(self): self.show_page(self.stack.widget(3), "Driver Management")
-    def show_options(self): self.show_page(self.stack.widget(4), "Options")
+    def show_options(self):
+        self.update_max_strategy_ui_state()
+        self.show_page(self.stack.widget(4), "Options")
     def show_about(self): self.show_page(self.stack.widget(5), "About")
     def show_fan_cleaner(self): self.show_page(self.cleaner_page, "Fan Cleaner")
 
@@ -1153,7 +1427,11 @@ class MainWindow(QMainWindow):
         self.on_curve_changed()
 
     def revert_curve(self):
-        saved_curve = self.controller.config.get("curve", [])
+        target = getattr(self, "current_target_fan", "cpu")
+        if target == "gpu":
+            saved_curve = self.controller.config.get("gpu_curve", [])
+        else:
+            saved_curve = self.controller.config.get("curve", [])
         if not saved_curve:
             saved_curve = [(40, 20), (55, 40), (70, 65), (85, 90), (95, 100)]
         self.curve_editor.set_points(saved_curve)
@@ -1162,7 +1440,7 @@ class MainWindow(QMainWindow):
             self.curve_revert_btn.setVisible(False)
         if self.mode_combo.currentText() == "Curve":
             self.set_btn.setText("Set Mode")
-        self.status_label.setText("Fan curve reverted to saved settings.")
+        self.status_label.setText(f"{target.upper()} fan curve reverted to saved settings.")
 
     def apply_fan_mode(self):
         mode = self.mode_combo.currentText().lower()
@@ -1185,10 +1463,16 @@ class MainWindow(QMainWindow):
         if mode == "manual":
             percent = self.manual_spin.value()
             pwm_val = int(round(percent / 100 * 255))
-            self.controller.config["manual_pwm"] = pwm_val
+            if getattr(self, "current_target_fan", "cpu") == "gpu":
+                self.controller.config["gpu_manual_pwm"] = pwm_val
+            else:
+                self.controller.config["manual_pwm"] = pwm_val
         elif mode == "curve":
             points = self.curve_editor.get_points()
-            self.controller.config["curve"] = points
+            if getattr(self, "current_target_fan", "cpu") == "gpu":
+                self.controller.config["gpu_curve"] = points
+            else:
+                self.controller.config["curve"] = points
             
         self.controller.save_config()
         
@@ -1214,9 +1498,9 @@ class MainWindow(QMainWindow):
             self.controller.set_fan_mode("max")
             self.status_label.setText("Set mode to Max")
         elif mode == "manual":
-            pwm_val = self.controller.config["manual_pwm"]
-            self.controller.set_fan_pwm(pwm_val)
-            self.status_label.setText(f"Set manual speed to {self.manual_spin.value()}% (PWM: {pwm_val})")
+            cpu_pwm, gpu_pwm = self.controller.get_dual_manual_pwm()
+            self.controller.set_fan_pwm(cpu_pwm, gpu_pwm)
+            self.status_label.setText(f"Set manual speed (CPU: {int(round(cpu_pwm/255*100))}%, GPU: {int(round(gpu_pwm/255*100))}%)")
         elif mode == "curve":
             self.status_label.setText("Curve mode enabled")
             self.start_curve_loop()
@@ -1255,17 +1539,13 @@ class MainWindow(QMainWindow):
 
         temp = avg_temp
         
-        target_pwm = self.controller.calculate_target_pwm(temp)
-        if target_pwm is None:
-             return
-             
-        pwm_val = target_pwm
+        target_cpu_pwm, target_gpu_pwm = self.controller.calculate_dual_target_pwm(temp, self.controller.get_gpu_temp())
         
         current_rpm = self.controller.get_fan_speed()
-        max_rpm = self.controller.config.get("fan_max", 0)
+        max_rpm = self.controller.get_effective_fan_max()
         
         if max_rpm > 0:
-            target_rpm = (pwm_val / 255) * max_rpm
+            target_rpm = (target_cpu_pwm / 255) * max_rpm
             diff = abs(target_rpm - current_rpm)
             
             import time
@@ -1275,16 +1555,16 @@ class MainWindow(QMainWindow):
                     self.hysteresis_start_time = time.time()
                 
                 if time.time() - self.hysteresis_start_time > 60:
-                    self.controller.set_fan_pwm(pwm_val)
+                    self.controller.set_fan_pwm(target_cpu_pwm, target_gpu_pwm)
                     self.hysteresis_start_time = None
                     pass 
                 else:
                     return
             else:
                 self.hysteresis_start_time = None
-                self.controller.set_fan_pwm(pwm_val)
+                self.controller.set_fan_pwm(target_cpu_pwm, target_gpu_pwm)
         else:
-            self.controller.set_fan_pwm(pwm_val)
+            self.controller.set_fan_pwm(target_cpu_pwm, target_gpu_pwm)
 
     def toggle_calibration(self):
         if getattr(self, "cal_running", False):
@@ -1417,6 +1697,7 @@ class MainWindow(QMainWindow):
         
         if success:
             self.status_label.setStyleSheet("color: #888; padding: 5px;")
+            self.update_manual_max_source_label()
             QMessageBox.information(self, "Driver Install", msg)
         else:
             if msg == "PWM_DETECTED":
@@ -1466,41 +1747,257 @@ class MainWindow(QMainWindow):
         self.exp_options_widget.setVisible(checked)
         self.save_options()
 
-    def toggle_manual_max_rpm(self, checked):
-        self.controller.config["use_manual_max_rpm"] = checked
-        self.manual_max_spin.setEnabled(checked)
-        if hasattr(self, "manual_max_save_btn"):
-            self.manual_max_save_btn.setEnabled(checked)
-        self.save_manual_max_rpm()
+    def toggle_advanced_fan_control(self, checked):
+        self.controller.config["use_advanced_fan_control"] = checked
+        if hasattr(self, "adv_controls_widget"):
+            self.adv_controls_widget.setEnabled(checked)
+            self.update_adv_controls_visual_state(checked)
+        self.update_max_strategy_ui_state()
+        self.update_fan_target_toggle_visibility()
+        self.controller.save_config()
+
+    def update_adv_controls_visual_state(self, checked: bool):
+        if not hasattr(self, "adv_controls_widget"):
+            return
+        if hasattr(self, "adv_opacity_effect"):
+            self.adv_opacity_effect.setOpacity(1.0 if checked else 0.40)
+        if checked:
+            self.adv_controls_widget.setStyleSheet("""
+                QFrame#advControlsCard {
+                    background-color: #262629;
+                    border: 1px solid #3d3d42;
+                    border-radius: 8px;
+                }
+            """)
+        else:
+            self.adv_controls_widget.setStyleSheet("""
+                QFrame#advControlsCard {
+                    background-color: #141415;
+                    border: 1px solid #202022;
+                    border-radius: 8px;
+                }
+            """)
+
+    def on_max_strategy_changed(self, index):
+        strat_map = {0: "calibration", 1: "omen_defaults", 2: "custom"}
+        strat = strat_map.get(index, "calibration")
+        self.controller.config["max_fan_speed_strategy"] = strat
+        self.update_max_strategy_ui_state()
+        self.controller.save_config()
+
+    def update_max_strategy_ui_state(self):
+        if not hasattr(self, "max_strategy_combo"):
+            return
+        
+        strat_idx = self.max_strategy_combo.currentIndex()
+        adv_enabled = getattr(self, "adv_fan_check", None) and self.adv_fan_check.isChecked()
+        is_custom = (strat_idx == 2)
+        is_omen_defaults = (strat_idx == 1)
+
+        # Show/hide custom spinbox row (placed down from the dropdown)
+        if hasattr(self, "custom_max_row_widget"):
+            self.custom_max_row_widget.setVisible(is_custom)
+
+        # Show/hide Windows import button (shown only when OMEN defaults is chosen)
+        if hasattr(self, "win_cfg_import_btn"):
+            self.win_cfg_import_btn.setVisible(is_omen_defaults)
+
+        can_edit = adv_enabled and is_custom
+        self.manual_cpu_spin.setEnabled(can_edit)
+        self.manual_gpu_spin.setEnabled(can_edit)
+        self.manual_max_save_btn.setEnabled(can_edit)
+
+        if is_custom:
+            c_m = int(self.controller.config.get("manual_cpu_max_rpm", 6000))
+            g_m = int(self.controller.config.get("manual_gpu_max_rpm", 5800))
+            self.manual_cpu_spin.blockSignals(True)
+            self.manual_gpu_spin.blockSignals(True)
+            self.manual_cpu_spin.setValue(c_m)
+            self.manual_gpu_spin.setValue(g_m)
+            self.manual_cpu_spin.blockSignals(False)
+            self.manual_gpu_spin.blockSignals(False)
+
+        self.update_manual_max_source_label()
 
     def on_manual_max_spin_changed(self):
         self.update_manual_max_source_label()
 
     def save_manual_max_rpm(self):
-        val = self.manual_max_spin.value()
-        self.controller.config["manual_max_rpm"] = val
+        cpu_val = self.manual_cpu_spin.value()
+        gpu_val = self.manual_gpu_spin.value()
+        self.controller.config["manual_cpu_max_rpm"] = cpu_val
+        self.controller.config["manual_gpu_max_rpm"] = gpu_val
         self.controller.save_config()
         self.update_manual_max_source_label()
-        self.status_label.setText(f"Manual Max RPM set to {val} RPM.")
+        self.status_label.setText(f"Custom Max RPM saved (CPU: {cpu_val} RPM, GPU: {gpu_val} RPM).")
 
     def update_manual_max_source_label(self):
         if not hasattr(self, "manual_max_source_lbl"):
             return
         
-        current_val = self.manual_max_spin.value()
-        win_rpm = self.controller.config.get("windows_max_rpm")
+        cpu_val = self.manual_cpu_spin.value()
+        gpu_val = self.manual_gpu_spin.value()
+        win_cpu = self.controller.config.get("windows_cpu_max_rpm", self.controller.config.get("windows_max_rpm"))
+        win_gpu = self.controller.config.get("windows_gpu_max_rpm", self.controller.config.get("windows_max_rpm"))
+        cal_cpu = self.controller.config.get("fan1_max", 0)
+        cal_gpu = self.controller.config.get("fan2_max", 0)
+        legacy_cal = self.controller.config.get("fan_max", 0)
+        c_cal = cal_cpu or legacy_cal
+        g_cal = cal_gpu or legacy_cal
+        c_win = win_cpu or 6000
+        g_win = win_gpu or 5800
         
-        if win_rpm is not None and current_val == win_rpm and self.controller.config.get("windows_config_imported", False):
-            self.manual_max_source_lbl.setText("(Sourced from Windows OMEN Config)")
-            self.manual_max_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold; margin-left: 24px;")
-        elif self.manual_max_check.isChecked():
-            self.manual_max_source_lbl.setText("(User Specified)")
-            self.manual_max_source_lbl.setStyleSheet("color: #2196f3; font-size: 11px; font-weight: bold; margin-left: 24px;")
-        elif self.controller.config.get("fan_max", 0) > 0:
-            self.manual_max_source_lbl.setText("(Live Calibrated)")
-            self.manual_max_source_lbl.setStyleSheet("color: #ff9800; font-size: 11px; font-weight: bold; margin-left: 24px;")
+        # Source / Match Text
+        strat_idx = self.max_strategy_combo.currentIndex() if hasattr(self, "max_strategy_combo") else 0
+        if strat_idx == 0:
+            if c_cal > 0 or g_cal > 0:
+                self.manual_max_source_lbl.setText(f"(Calibrated Result: CPU {c_cal} RPM, GPU {g_cal} RPM)")
+                self.manual_max_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold;")
+            else:
+                self.manual_max_source_lbl.setText("(No Calibration Found - Please Calibrate Fans)")
+                self.manual_max_source_lbl.setStyleSheet("color: #888; font-size: 11px;")
+        elif strat_idx == 1:
+            if win_cpu is not None and self.controller.config.get("windows_config_imported", False):
+                self.manual_max_source_lbl.setText(f"(Sourced from Windows OMEN Config: CPU {c_win} RPM, GPU {g_win} RPM)")
+                self.manual_max_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold;")
+            else:
+                self.manual_max_source_lbl.setText(f"(OMEN Gaming Hub Defaults: CPU {c_win} RPM, GPU {g_win} RPM)")
+                self.manual_max_source_lbl.setStyleSheet("color: #2196f3; font-size: 11px; font-weight: bold;")
+        else: # custom
+            if win_cpu is not None and win_gpu is not None and cpu_val == win_cpu and gpu_val == win_gpu:
+                self.manual_max_source_lbl.setText(f"(Matches OMEN Gaming Hub Defaults: CPU {cpu_val} RPM, GPU {gpu_val} RPM)")
+                self.manual_max_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold;")
+            elif (c_cal > 0 or g_cal > 0) and cpu_val == c_cal and gpu_val == g_cal:
+                self.manual_max_source_lbl.setText(f"(Matches Calibrated Result: CPU {cpu_val} RPM, GPU {gpu_val} RPM)")
+                self.manual_max_source_lbl.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold;")
+            else:
+                self.manual_max_source_lbl.setText(f"(User Specified Custom Values: CPU {cpu_val} RPM, GPU {gpu_val} RPM)")
+                self.manual_max_source_lbl.setStyleSheet("color: #2196f3; font-size: 11px; font-weight: bold;")
+
+        # Reinstall Driver Warning
+        if hasattr(self, "driver_reinstall_warning_lbl"):
+            strat_idx = self.max_strategy_combo.currentIndex() if hasattr(self, "max_strategy_combo") else 0
+            if strat_idx == 0:
+                eff_cpu = int(c_cal)
+                eff_gpu = int(g_cal)
+            elif strat_idx == 1:
+                eff_cpu = int(c_win)
+                eff_gpu = int(g_win)
+            else: # custom
+                eff_cpu = int(cpu_val)
+                eff_gpu = int(gpu_val)
+
+            last_p_cpu, last_p_gpu = self.controller.get_last_patched_fan_limits()
+            if last_p_cpu is not None and last_p_gpu is not None:
+                if (eff_cpu, eff_gpu) != (last_p_cpu, last_p_gpu):
+                    self.driver_reinstall_warning_lbl.setText("⚠️ These maximum values will be applied after reinstalling the driver.")
+                    self.driver_reinstall_warning_lbl.setVisible(True)
+                else:
+                    self.driver_reinstall_warning_lbl.setVisible(False)
+            elif self.controller.check_install_type() is None:
+                self.driver_reinstall_warning_lbl.setText("⚠️ These maximum values will be applied after installing the driver.")
+                self.driver_reinstall_warning_lbl.setVisible(True)
+            else:
+                self.driver_reinstall_warning_lbl.setVisible(False)
+
+        # Over-Ceiling Warning
+        if hasattr(self, "over_ceiling_warning_lbl"):
+            cal_max = max(self.controller.config.get("fan1_max", 0), self.controller.config.get("fan2_max", 0))
+            win_max = max(self.controller.config.get("windows_cpu_max_rpm", 0), self.controller.config.get("windows_gpu_max_rpm", 0))
+            ceiling = max(cal_max, win_max, 6000)
+            if cpu_val > ceiling or gpu_val > ceiling:
+                self.over_ceiling_warning_lbl.setText(f"⚠️ Warning: Selected RPM exceeds detected hardware limits ({ceiling} RPM).")
+                self.over_ceiling_warning_lbl.setVisible(True)
+            else:
+                self.over_ceiling_warning_lbl.setVisible(False)
+
+    def on_method_changed(self, index):
+        method_map = {0: "percentage", 1: "asymmetrical", 2: "custom_gpu"}
+        method = method_map.get(index, "percentage")
+        self.controller.config["fan_control_method"] = method
+        if hasattr(self, "method_combo"):
+            tip = self.method_combo.itemData(index, Qt.ItemDataRole.ToolTipRole)
+            if tip:
+                self.method_combo.setToolTip(tip)
+        if hasattr(self, "method_context_layout"):
+            self.method_context_layout.setCurrentIndex(index)
+        self.update_fan_target_toggle_visibility()
+        self.controller.save_config()
+
+    def on_asym_offset_changed(self, val):
+        self.controller.config["asymmetrical_offset_rpm"] = val
+        if hasattr(self, "asym_desc_lbl"):
+            if val > 0:
+                self.asym_desc_lbl.setText(f"• GPU fan will spin {val} RPM faster than CPU fan")
+            elif val < 0:
+                self.asym_desc_lbl.setText(f"• CPU fan will spin {abs(val)} RPM faster than GPU fan")
+            else:
+                self.asym_desc_lbl.setText("• CPU and GPU fans will spin at the same target RPM")
+        self.controller.save_config()
+
+    def on_gpu_temp_check_toggled(self, checked):
+        self.controller.config["gpu_curve_use_gpu_temp"] = checked
+        self.controller.save_config()
+
+    def update_fan_target_toggle_visibility(self):
+        if not hasattr(self, "fan_target_widget"):
+            return
+        is_custom_gpu = (
+            self.controller.config.get("use_advanced_fan_control", False) and
+            self.controller.config.get("fan_control_method", "percentage") == "custom_gpu"
+        )
+        self.fan_target_widget.setVisible(is_custom_gpu)
+        if not is_custom_gpu and getattr(self, "current_target_fan", "cpu") != "cpu":
+            self.set_configuring_target("cpu")
+
+    def set_configuring_target(self, target: str):
+        if getattr(self, "current_target_fan", "cpu") == target:
+            return
+        
+        # Save previous points to active config target
+        prev = getattr(self, "current_target_fan", "cpu")
+        if prev == "cpu":
+            self.controller.config["curve"] = self.curve_editor.get_points()
         else:
-            self.manual_max_source_lbl.setText("")
+            self.controller.config["gpu_curve"] = self.curve_editor.get_points()
+
+        self.current_target_fan = target
+        if target == "gpu":
+            if hasattr(self, "target_gpu_btn"):
+                self.target_gpu_btn.setChecked(True)
+            gpu_curve = self.controller.config.get("gpu_curve", [])
+            if not gpu_curve:
+                gpu_curve = [list(p) for p in self.controller.config.get("curve", [])]
+                if not gpu_curve:
+                    gpu_curve = [(40, 20), (55, 40), (70, 65), (85, 90), (95, 100)]
+                self.controller.config["gpu_curve"] = gpu_curve
+                self.controller.save_config()
+            self.curve_editor.set_theme("gpu")
+            self.curve_editor.set_points(gpu_curve)
+            if hasattr(self, "lbl_curve_title"):
+                self.lbl_curve_title.setText("GPU Fan Curve Editor")
+            gpu_manual = self.controller.config.get("gpu_manual_pwm", self.controller.config.get("manual_pwm", 128))
+            self.manual_spin.blockSignals(True)
+            self.manual_spin.setValue(int(round(gpu_manual / 255 * 100)))
+            self.manual_spin.blockSignals(False)
+        else:
+            if hasattr(self, "target_cpu_btn"):
+                self.target_cpu_btn.setChecked(True)
+            cpu_curve = self.controller.config.get("curve", [])
+            self.curve_editor.set_theme("cpu")
+            self.curve_editor.set_points(cpu_curve)
+            if hasattr(self, "lbl_curve_title"):
+                self.lbl_curve_title.setText("CPU Fan Curve Editor")
+            cpu_manual = self.controller.config.get("manual_pwm", 128)
+            self.manual_spin.blockSignals(True)
+            self.manual_spin.setValue(int(round(cpu_manual / 255 * 100)))
+            self.manual_spin.blockSignals(False)
+
+        self.curve_unsaved_lbl.setVisible(False)
+        if hasattr(self, "curve_revert_btn"):
+            self.curve_revert_btn.setVisible(False)
+        if self.mode_combo.currentText() == "Curve":
+            self.set_btn.setText("Set Mode")
 
     def import_windows_config_dialog(self):
         msg_box = QMessageBox(self)
@@ -1528,19 +2025,21 @@ class MainWindow(QMainWindow):
             cpu = parsed.get("cleaner_cpu_speed", 37)
             gpu = parsed.get("cleaner_gpu_speed", 39)
             dur = parsed.get("cleaner_duration_sec", 30)
-            max_rpm = parsed.get("manual_max_rpm", 5800)
+            cpu_max_rpm = parsed.get("manual_cpu_max_rpm", 6000)
+            gpu_max_rpm = parsed.get("manual_gpu_max_rpm", 5800)
             
             # Refresh GUI widgets
-            self.manual_max_check.setChecked(True)
-            self.manual_max_spin.setValue(max_rpm)
-            self.update_manual_max_source_label()
+            if hasattr(self, "max_strategy_combo"):
+                self.max_strategy_combo.setCurrentIndex(1)
+            self.update_max_strategy_ui_state()
 
             info_text = (
                 f"Configuration successfully imported!\n\n"
                 f"• CleanCreek CPU Speed: {cpu} ({cpu*100} RPM)\n"
                 f"• CleanCreek GPU Speed: {gpu} ({gpu*100} RPM)\n"
                 f"• Active Clean Duration: {dur} seconds\n"
-                f"• Extracted Max Fan RPM: {max_rpm} RPM\n\n"
+                f"• Extracted CPU Max RPM: {cpu_max_rpm} RPM\n"
+                f"• Extracted GPU Max RPM: {gpu_max_rpm} RPM\n\n"
                 f"These values have been permanently saved to this program's own configuration.\n"
                 f"You may now safely unmount your Windows drive if you desire to do so."
             )
@@ -1566,27 +2065,25 @@ class MainWindow(QMainWindow):
                 self.wait_spin.setValue(self.controller.config.get("calibration_wait", 30))
                 self.ma_spin.setValue(self.controller.config.get("ma_window", 5))
                 self.loglevel_combo.setCurrentText(self.controller.config.get("log_level", "INFO").upper())
-                self.manual_max_check.setChecked(self.controller.config.get("use_manual_max_rpm", False))
-                self.manual_max_spin.setValue(self.controller.config.get("manual_max_rpm", 5800))
+                if hasattr(self, "adv_fan_check"):
+                    self.adv_fan_check.setChecked(self.controller.config.get("use_advanced_fan_control", False))
+                strat_map = {"calibration": 0, "omen_defaults": 1, "custom": 2}
+                cur_strat = self.controller.config.get("max_fan_speed_strategy", "calibration")
+                if hasattr(self, "max_strategy_combo"):
+                    self.max_strategy_combo.setCurrentIndex(strat_map.get(cur_strat, 0))
+                method_map = {"percentage": 0, "asymmetrical": 1, "custom_gpu": 2}
+                cur_method = self.controller.config.get("fan_control_method", "percentage")
+                if hasattr(self, "method_combo"):
+                    self.method_combo.setCurrentIndex(method_map.get(cur_method, 0))
+                if hasattr(self, "asym_offset_spin"):
+                    self.asym_offset_spin.setValue(self.controller.config.get("asymmetrical_offset_rpm", 200))
+                if hasattr(self, "gpu_temp_check"):
+                    self.gpu_temp_check.setChecked(self.controller.config.get("gpu_curve_use_gpu_temp", True))
+                self.update_max_strategy_ui_state()
                 QMessageBox.information(self, "Import Settings", msg)
             else:
                 QMessageBox.critical(self, "Import Error", msg)
 
-    def toggle_shutdown_hook(self, enabled):
-        if enabled:
-            success, msg = self.controller.create_shutdown_service()
-        else:
-            success, msg = self.controller.remove_shutdown_service()
-        
-        if not success:
-            QMessageBox.critical(self, "Service Error", msg)
-            self.shutdown_hook_check.setChecked(not enabled)
-        else:
-            self.status_label.setText(msg)
-            # Ensure main daemon is running if installed
-            if self.controller.is_service_installed() and not self.controller.is_service_running():
-                self.controller.start_service()
-                QTimer.singleShot(1000, self.check_service_status)
 
     def toggle_bios(self):
         is_currently_enabled = "Disable" in self.bios_btn.text()

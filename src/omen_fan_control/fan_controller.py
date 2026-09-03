@@ -274,32 +274,70 @@ class FanController(
         elif mode == 'auto':
             self.write_sys_file(self.pwm1_enable_path, 2)
 
-    def set_fan_pwm(self, value: int) -> None:
+    def get_effective_fan_limits(self) -> tuple[int, int]:
+        cal_c = int(self.config.get("fan1_max", 0)) or int(self.config.get("fan_max", 0))
+        cal_g = int(self.config.get("fan2_max", 0)) or int(self.config.get("fan_max", 0))
+
+        if self.config.get("use_advanced_fan_control", False):
+            strat = self.config.get("max_fan_speed_strategy", "calibration")
+            if strat == "omen_defaults":
+                cpu_m = int(self.config.get("windows_cpu_max_rpm") or 0)
+                gpu_m = int(self.config.get("windows_gpu_max_rpm") or 0)
+                if cpu_m > 0 and gpu_m > 0:
+                    return cpu_m, gpu_m
+                if cal_c > 0 or cal_g > 0:
+                    return cal_c or cal_g, cal_g or cal_c
+                return cpu_m or 6000, gpu_m or 5800
+            elif strat == "custom":
+                cpu_m = int(self.config.get("manual_cpu_max_rpm") or 0)
+                gpu_m = int(self.config.get("manual_gpu_max_rpm") or 0)
+                if cpu_m > 0 and gpu_m > 0:
+                    return cpu_m, gpu_m
+                if cal_c > 0 or cal_g > 0:
+                    return cal_c or cal_g, cal_g or cal_c
+                return cpu_m or 6000, gpu_m or 5800
+            else: # calibration
+                if cal_c > 0 or cal_g > 0:
+                    return cal_c or cal_g, cal_g or cal_c
+                return 6000, 5800
+        
+        # Standard flow / default behavior: use calibrated value if calibrated max exists
+        if cal_c > 0 or cal_g > 0:
+            return cal_c or cal_g, cal_g or cal_c
+        return 6000, 5800
+
+    def get_effective_fan_max(self) -> int:
+        cpu_m, gpu_m = self.get_effective_fan_limits()
+        return max(cpu_m, gpu_m)
+
+    def set_fan_pwm(self, value: int, gpu_value: int | None = None) -> None:
         current_enable = self.read_sys_file(self.pwm1_enable_path)
         if current_enable != "1":
             self.write_sys_file(self.pwm1_enable_path, 1)
         val_str = str(int(value))
         self.write_sys_file(self.pwm1_path, val_str)
         if self.pwm2_path and self.pwm2_path.exists():
-            self.write_sys_file(self.pwm2_path, val_str)
+            gpu_val_str = str(int(gpu_value)) if gpu_value is not None else val_str
+            self.write_sys_file(self.pwm2_path, gpu_val_str)
 
-    def calculate_target_pwm(self, current_temp: int) -> int | None:
-        curve = self.config.get("curve", [])
+    def calculate_target_pwm(self, current_temp: int, curve: list[list[float]] | None = None) -> int | None:
+        if curve is None:
+            curve = self.config.get("curve", [])
         if not curve:
             return None
 
-        curve = sorted(curve, key=lambda p: p[0])
+        sorted_curve = sorted(curve, key=lambda p: p[0])
 
         target_speed_percent = 0
 
-        if current_temp <= curve[0][0]:
-            target_speed_percent = curve[0][1]
-        elif current_temp >= curve[-1][0]:
-            target_speed_percent = curve[-1][1]
+        if current_temp <= sorted_curve[0][0]:
+            target_speed_percent = sorted_curve[0][1]
+        elif current_temp >= sorted_curve[-1][0]:
+            target_speed_percent = sorted_curve[-1][1]
         else:
-            for i in range(len(curve) - 1):
-                p1 = curve[i]
-                p2 = curve[i + 1]
+            for i in range(len(sorted_curve) - 1):
+                p1 = sorted_curve[i]
+                p2 = sorted_curve[i + 1]
                 if p1[0] <= current_temp <= p2[0]:
                     interp_mode = self.config.get("curve_interpolation", "smooth")
                     if interp_mode == "discrete":
@@ -314,6 +352,76 @@ class FanController(
                     break
 
         return int(round(target_speed_percent / 100 * 255))
+
+    def calculate_dual_target_pwm(self, cpu_temp: int, gpu_temp: int | None = None) -> tuple[int, int]:
+        method = self.config.get("fan_control_method", "percentage") if self.config.get("use_advanced_fan_control", False) else "percentage"
+        cpu_pwm = self.calculate_target_pwm(cpu_temp)
+        if cpu_pwm is None:
+            cpu_pwm = 0
+
+        if method == "percentage":
+            return cpu_pwm, cpu_pwm
+
+        elif method == "asymmetrical":
+            cpu_max, gpu_max = self.get_effective_fan_limits()
+            if cpu_max <= 0:
+                cpu_max = 6000
+            if gpu_max <= 0:
+                gpu_max = 5800
+
+            cpu_rpm = (cpu_pwm / 255) * cpu_max
+            offset = int(self.config.get("asymmetrical_offset_rpm", 200))
+            target_gpu_rpm = max(0, min(gpu_max, cpu_rpm + offset))
+            gpu_pwm = int(round((target_gpu_rpm / gpu_max) * 255))
+            gpu_pwm = max(0, min(255, gpu_pwm))
+            return cpu_pwm, gpu_pwm
+
+        elif method == "custom_gpu":
+            use_gpu_sensor = self.config.get("gpu_curve_use_gpu_temp", True)
+            if use_gpu_sensor and gpu_temp is not None and gpu_temp > 0:
+                effective_gpu_temp = gpu_temp
+            else:
+                ref_sensor = self.config.get("reference_sensor", "cpu")
+                if ref_sensor == "gpu" and gpu_temp is not None and gpu_temp > 0:
+                    effective_gpu_temp = gpu_temp
+                else:
+                    effective_gpu_temp = cpu_temp
+
+            gpu_curve = self.config.get("gpu_curve", [])
+            if not gpu_curve:
+                gpu_pwm = cpu_pwm
+            else:
+                gpu_pwm = self.calculate_target_pwm(effective_gpu_temp, curve=gpu_curve)
+                if gpu_pwm is None:
+                    gpu_pwm = cpu_pwm
+            return cpu_pwm, gpu_pwm
+
+        return cpu_pwm, cpu_pwm
+
+    def get_dual_manual_pwm(self) -> tuple[int, int]:
+        method = self.config.get("fan_control_method", "percentage") if self.config.get("use_advanced_fan_control", False) else "percentage"
+        cpu_pwm = max(0, min(255, int(self.config.get("manual_pwm", 128))))
+
+        if method == "percentage":
+            return cpu_pwm, cpu_pwm
+
+        elif method == "asymmetrical":
+            cpu_max, gpu_max = self.get_effective_fan_limits()
+            if cpu_max <= 0:
+                cpu_max = 6000
+            if gpu_max <= 0:
+                gpu_max = 5800
+            cpu_rpm = (cpu_pwm / 255) * cpu_max
+            offset = int(self.config.get("asymmetrical_offset_rpm", 200))
+            target_gpu_rpm = max(0, min(gpu_max, cpu_rpm + offset))
+            gpu_pwm = int(round((target_gpu_rpm / gpu_max) * 255))
+            return cpu_pwm, max(0, min(255, gpu_pwm))
+
+        elif method == "custom_gpu":
+            gpu_pwm = max(0, min(255, int(self.config.get("gpu_manual_pwm", cpu_pwm))))
+            return cpu_pwm, gpu_pwm
+
+        return cpu_pwm, cpu_pwm
 
     def calibrate(self) -> Generator[int, None, tuple[int, int]]:
         print("Starting calibration...")
@@ -341,8 +449,6 @@ class FanController(
             rpm1, _ = self.parse_hwmon_rpm(val1)
             rpm2, _ = self.parse_hwmon_rpm(val2)
 
-            max_rpm = max(rpm1, rpm2)
-            self.config["fan_max"] = max_rpm
             self.config["fan1_max"] = rpm1
             self.config["fan2_max"] = rpm2
             self.save_config()

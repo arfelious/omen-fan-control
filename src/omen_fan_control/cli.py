@@ -279,19 +279,6 @@ def stop_service_cmd():
     success, msg = controller.stop_service()
     click.echo(msg)
     
-@service.command(name="enable-shutdown-hook")
-def enable_shutdown_hook_cmd():
-    """Enable fan cleanup on shutdown (sets fans to 30%)"""
-    controller = get_controller()
-    success, msg = controller.create_shutdown_service()
-    click.echo(msg)
-
-@service.command(name="disable-shutdown-hook")
-def disable_shutdown_hook_cmd():
-    """Disable fan cleanup on shutdown"""
-    controller = get_controller()
-    success, msg = controller.remove_shutdown_service()
-    click.echo(msg)
     
 @service.command(name="status")
 def service_status_cmd():
@@ -314,11 +301,6 @@ def status():
     if not controller.is_service_installed():
         status_str = click.style("NOT INSTALLED", fg="yellow")
     click.echo(f"Service Status:    {status_str}")
-    
-    # Shutdown Hook
-    is_hook_enabled = controller.is_shutdown_service_enabled()
-    hook_str = click.style("ENABLED", fg="green") if is_hook_enabled else click.style("DISABLED", fg="red")
-    click.echo(f"Shutdown Hook:     {hook_str}")
     
     # Installation Type
     install_type = controller.check_install_type()

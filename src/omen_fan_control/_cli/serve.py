@@ -106,38 +106,38 @@ def serve() -> None:
                 temp_history.pop(0)
             avg_temp = sum(temp_history) / len(temp_history)
 
+            gpu_temp = controller.get_gpu_temp()
+
             if mode == "curve":
-                target_pwm = controller.calculate_target_pwm(avg_temp)
-                if target_pwm is not None:
-                    current_rpm = controller.get_fan_speed()
-                    max_rpm = controller.config.get("fan_max", 0)
+                target_cpu_pwm, target_gpu_pwm = controller.calculate_dual_target_pwm(avg_temp, gpu_temp)
+                current_rpm = controller.get_fan_speed()
+                max_rpm = controller.get_effective_fan_max()
 
-                    should_apply = True
+                should_apply = True
 
-                    if max_rpm > 0:
-                        target_rpm = (target_pwm / 255) * max_rpm
-                        diff = abs(target_rpm - current_rpm)
+                if max_rpm > 0:
+                    target_rpm = (target_cpu_pwm / 255) * max_rpm
+                    diff = abs(target_rpm - current_rpm)
 
-                        if diff <= 200:
-                            if hysteresis_start_time is None:
-                                hysteresis_start_time = time.time()
+                    if diff <= 200:
+                        if hysteresis_start_time is None:
+                            hysteresis_start_time = time.time()
 
-                            if time.time() - hysteresis_start_time > 60:
-                                should_apply = True
-                            else:
-                                should_apply = False
-                        else:
-                            hysteresis_start_time = None
+                        if time.time() - hysteresis_start_time > 60:
                             should_apply = True
-
-                    if should_apply:
-                        controller.set_fan_pwm(target_pwm)
+                        else:
+                            should_apply = False
+                    else:
                         hysteresis_start_time = None
+                        should_apply = True
+
+                if should_apply:
+                    controller.set_fan_pwm(target_cpu_pwm, target_gpu_pwm)
+                    hysteresis_start_time = None
 
             elif mode == "manual":
-                manual_val = controller.config.get("manual_pwm", -1)
-                if manual_val >= 0:
-                    controller.set_fan_pwm(manual_val)
+                cpu_pwm, gpu_pwm = controller.get_dual_manual_pwm()
+                controller.set_fan_pwm(cpu_pwm, gpu_pwm)
 
             elif mode == "max":
                 controller.set_fan_mode("max")

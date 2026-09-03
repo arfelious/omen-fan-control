@@ -580,15 +580,23 @@ class FanCleanerMixin:
             gpu_speed = data.get("CleanCreekGpuFanSpeed", 39)
             duration_ms = data.get("CleanCreekDuration", 30000)
 
-            extracted_max_rpm = 5800
+            extracted_cpu_max_rpm = 6000
+            extracted_gpu_max_rpm = 5800
             try:
                 fan_curve = data.get("SwFanControlCustomFanCurve", {})
                 boundary = fan_curve.get("Boundary", {})
-                upper_bounds = boundary.get("CPU_Fan_Speed_Upper_Bound_List", [])
-                if upper_bounds and isinstance(upper_bounds, list):
-                    max_idx = max(upper_bounds)
-                    if max_idx > 0:
-                        extracted_max_rpm = max_idx * 100
+                cpu_bounds = boundary.get("CPU_Fan_Speed_Upper_Bound_List", [])
+                gpu_bounds = boundary.get("GPU_Fan_Speed_Upper_Bound_List", [])
+                if cpu_bounds and isinstance(cpu_bounds, list):
+                    max_cpu_idx = max(cpu_bounds)
+                    if max_cpu_idx > 0:
+                        extracted_cpu_max_rpm = max_cpu_idx * 100
+                if gpu_bounds and isinstance(gpu_bounds, list):
+                    max_gpu_idx = max(gpu_bounds)
+                    if max_gpu_idx > 0:
+                        extracted_gpu_max_rpm = max_gpu_idx * 100
+                elif cpu_bounds and isinstance(cpu_bounds, list):
+                    extracted_gpu_max_rpm = extracted_cpu_max_rpm
             except Exception as e:
                 print(f"Could not extract fan curve upper bound: {e}")
 
@@ -597,7 +605,8 @@ class FanCleanerMixin:
                 "cleaner_gpu_speed": gpu_speed,
                 "cleaner_duration_ms": duration_ms,
                 "cleaner_duration_sec": int(duration_ms / 1000),
-                "manual_max_rpm": extracted_max_rpm,
+                "manual_cpu_max_rpm": extracted_cpu_max_rpm,
+                "manual_gpu_max_rpm": extracted_gpu_max_rpm,
             }
             return True, "Successfully parsed PowerControlConfig.json", result
         except Exception as e:
@@ -670,8 +679,10 @@ class FanCleanerMixin:
         controller.config["cleaner_gpu_speed"] = parsed["cleaner_gpu_speed"]
         controller.config["cleaner_duration"] = parsed["cleaner_duration_sec"]
         controller.config["windows_cleaner_duration"] = parsed["cleaner_duration_sec"]
-        controller.config["manual_max_rpm"] = parsed["manual_max_rpm"]
-        controller.config["windows_max_rpm"] = parsed["manual_max_rpm"]
+        controller.config["manual_cpu_max_rpm"] = parsed["manual_cpu_max_rpm"]
+        controller.config["manual_gpu_max_rpm"] = parsed["manual_gpu_max_rpm"]
+        controller.config["windows_cpu_max_rpm"] = parsed["manual_cpu_max_rpm"]
+        controller.config["windows_gpu_max_rpm"] = parsed["manual_gpu_max_rpm"]
         controller.config["use_manual_max_rpm"] = True
         controller.config["windows_config_imported"] = True
         controller.save_config()
@@ -694,7 +705,7 @@ class FanCleanerMixin:
             if not isinstance(imported_data, dict):
                 return False, "Invalid settings file: Content is not a JSON object."
 
-            expected_keys = {"mode", "curve", "cleaner_interval", "reference_sensor", "manual_max_rpm"}
+            expected_keys = {"mode", "curve", "cleaner_interval", "reference_sensor", "manual_max_rpm", "manual_cpu_max_rpm", "manual_gpu_max_rpm"}
             if not any(k in imported_data for k in expected_keys):
                 return False, "Incompatible settings file: Required HP OMEN Fan Control keys not found."
 

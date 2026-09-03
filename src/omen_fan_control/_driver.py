@@ -29,11 +29,16 @@ class DriverInstallerMixin:
         with open(source_to_read) as f:
             content = f.read()
 
-        max_rpm_val = math.floor(fan_max / 100)
-        cpu_max = self.config.get("fan1_max", 0) or fan_max
-        gpu_max = self.config.get("fan2_max", 0) or fan_max
-        cpu_max_val = math.floor(cpu_max / 100) if cpu_max > 0 else max_rpm_val
-        gpu_max_val = math.floor(gpu_max / 100) if gpu_max > 0 else max_rpm_val
+        cpu_max, gpu_max = self.get_effective_fan_limits()
+        if fan_max > 0:
+            if cpu_max == 0:
+                cpu_max = fan_max
+            if gpu_max == 0:
+                gpu_max = fan_max
+
+        max_rpm_val = math.floor(max(cpu_max, gpu_max, fan_max) / 100)
+        cpu_max_val = math.floor(cpu_max / 100) if cpu_max > 0 else (60 if max_rpm_val == 0 else max_rpm_val)
+        gpu_max_val = math.floor(gpu_max / 100) if gpu_max > 0 else (58 if max_rpm_val == 0 else max_rpm_val)
 
         content = re.sub(r'#define\s+OMEN_CPU_MAX_RPM\s+\d+', f'#define OMEN_CPU_MAX_RPM          {cpu_max_val}', content)
         content = re.sub(r'#define\s+OMEN_GPU_MAX_RPM\s+\d+', f'#define OMEN_GPU_MAX_RPM          {gpu_max_val}', content)
@@ -188,6 +193,9 @@ class DriverInstallerMixin:
                 subprocess.run(["modprobe", "hp-wmi"], check=False)
                 return False, f"Insmod failed: {e.stderr}\n(Original driver re-loaded attempts)"
 
+        eff_cpu, eff_gpu = controller.get_effective_fan_limits()
+        controller.config["last_patched_cpu_max_rpm"] = eff_cpu
+        controller.config["last_patched_gpu_max_rpm"] = eff_gpu
         controller.config["install_type"] = "temporary"
         controller.save_config()
 
@@ -218,6 +226,9 @@ class DriverInstallerMixin:
             except subprocess.CalledProcessError:
                 return False, "Install script failed. Check terminal output above for details."
 
+        eff_cpu, eff_gpu = controller.get_effective_fan_limits()
+        controller.config["last_patched_cpu_max_rpm"] = eff_cpu
+        controller.config["last_patched_gpu_max_rpm"] = eff_gpu
         controller.config["install_type"] = "permanent"
         controller.save_config()
 
@@ -244,10 +255,60 @@ class DriverInstallerMixin:
 
         return "temporary"
 
+    def get_effective_fan_limits(self) -> tuple[int, int]:
+        cal_c = int(self.config.get("fan1_max", 0)) or int(self.config.get("fan_max", 0))
+        cal_g = int(self.config.get("fan2_max", 0)) or int(self.config.get("fan_max", 0))
+
+        if self.config.get("use_advanced_fan_control", False):
+            strat = self.config.get("max_fan_speed_strategy", "calibration")
+            if strat == "omen_defaults":
+                cpu_m = int(self.config.get("windows_cpu_max_rpm") or 0)
+                gpu_m = int(self.config.get("windows_gpu_max_rpm") or 0)
+                if cpu_m > 0 and gpu_m > 0:
+                    return cpu_m, gpu_m
+                if cal_c > 0 or cal_g > 0:
+                    return cal_c or cal_g, cal_g or cal_c
+                return cpu_m or 6000, gpu_m or 5800
+            elif strat == "custom":
+                cpu_m = int(self.config.get("manual_cpu_max_rpm") or 0)
+                gpu_m = int(self.config.get("manual_gpu_max_rpm") or 0)
+                if cpu_m > 0 and gpu_m > 0:
+                    return cpu_m, gpu_m
+                if cal_c > 0 or cal_g > 0:
+                    return cal_c or cal_g, cal_g or cal_c
+                return cpu_m or 6000, gpu_m or 5800
+            else: # calibration
+                if cal_c > 0 or cal_g > 0:
+                    return cal_c or cal_g, cal_g or cal_c
+                return 6000, 5800
+        elif self.config.get("use_manual_max_rpm", False) or self.config.get("bypass_calibration", False):
+            cpu_m = int(self.config.get("manual_cpu_max_rpm") or self.config.get("manual_max_rpm", 0))
+            gpu_m = int(self.config.get("manual_gpu_max_rpm") or self.config.get("manual_max_rpm", 0))
+            if cpu_m > 0 and gpu_m > 0:
+                return cpu_m, gpu_m
+
+        # Default behavior: use calibrated value if calibrated max exists
+        if cal_c > 0 or cal_g > 0:
+            return cal_c or cal_g, cal_g or cal_c
+        return 6000, 5800
+
     def get_effective_fan_max(self) -> int:
-        if self.config.get("use_manual_max_rpm", False) or self.config.get("bypass_calibration", False):
-            return int(self.config.get("manual_max_rpm", 5800))
-        return int(self.config.get("fan_max", 0))
+        cpu_m, gpu_m = self.get_effective_fan_limits()
+        return max(cpu_m, gpu_m)
+
+    def get_last_patched_fan_limits(self) -> tuple[int | None, int | None]:
+        last_p_cpu = self.config.get("last_patched_cpu_max_rpm")
+        last_p_gpu = self.config.get("last_patched_gpu_max_rpm")
+        if last_p_cpu is not None and last_p_gpu is not None:
+            return int(last_p_cpu), int(last_p_gpu)
+
+        # Default behavior: use calibrated value if calibrated max exists
+        cal_cpu = int(self.config.get("fan1_max", 0)) or int(self.config.get("fan_max", 0))
+        cal_gpu = int(self.config.get("fan2_max", 0)) or int(self.config.get("fan_max", 0))
+        if cal_cpu > 0 or cal_gpu > 0:
+            return (cal_cpu or cal_gpu, cal_gpu or cal_cpu)
+
+        return None, None
 
     def restore_driver(self) -> tuple[bool, str]:
         messages: list[str] = []

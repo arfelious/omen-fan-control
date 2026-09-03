@@ -82,6 +82,13 @@ sudo ln -sf "$HOME/.local/bin/omen-fan-control"* /usr/local/bin/
 **After installation**
 ```bash
 sudo omen-fan-control status
+
+# For calibration, driver installation, and fan control daemon installation.
+sudo uv run omen-fan-control calibrate
+sudo uv run omen-fan-control install-patch permanent
+sudo uv run omen-fan-control service install
+
+# For GUI
 sudo omen-fan-control-gui
 ```
 
@@ -91,59 +98,39 @@ sudo omen-fan-control-gui
 
 ### Option B: Arch Linux (PKGBUILD)
 
-Build from `arch/`. Two variants are available:
+Build and install from `arch/omen-fan-control`:
 
-* **`omen-fan-control-dkms`** (recommended) – depends on `omen-fan-control`
-  and places the driver into `/usr/src/hp-wmi-omen-1.0/` so DKMS builds it
-  automatically on install and on every kernel update. This project brings
-  support for boards that aren't supported by the original driver so this
-  approach is the best way to ensure compatibility.
-* **`omen-fan-control`** (base) – the app only. Driver sources are bundled so
-  `install-patch permanent` still works, but DKMS is **not** auto-setup.
-  Suitable only for kernels >= 6.20 and if your board is supported by the
-  original `hp-wmi` kernel driver.
-
-#### Option 1) DKMS variant (Recommended: app + auto DKMS)
-```bash
-# 1. Build the base app:
-cd omen-fan-control/arch/omen-fan-control
-makepkg -sf
-
-# 2. Build the DKMS module package:
-cd ../omen-fan-control-dkms
-makepkg -f --nodeps
-
-# 3. Install both packages:
-sudo pacman -U ../omen-fan-control/omen-fan-control-*.pkg.tar.zst omen-fan-control-dkms-*.pkg.tar.zst
-```
-#### Option 2) Base app only (no DKMS auto-setup, only if board is already fully supported)
 ```bash
 cd omen-fan-control/arch/omen-fan-control
 makepkg -sf
 sudo pacman -U omen-fan-control-*.pkg.tar.zst
-
 ```
 
+Driver sources are bundled with the app. After installation, calibrate and install the permanent patch (which configures DKMS with your calibrated values):
+```bash
+sudo omen-fan-control calibrate
+sudo omen-fan-control install-patch permanent
+sudo omen-fan-control service install
+```
 
 ### Option C: Debian / Ubuntu (deb)
 
-Build from `deb/`. Two variants are available:
-
-* **`omen-fan-control`** (base) – the app only with bundled driver sources.
-* **`omen-fan-control-dkms`** (recommended) – depends on `omen-fan-control`
-  and places the driver into `/usr/src/hp-wmi-omen-1.0/` with a postinst
-  hook that runs `dkms add / build / install`.
+Build and install from `deb/`:
 
 ```bash
-# Build all packages
+# Build package
 cd omen-fan-control/deb
-./build.sh all
+./build.sh
 
-# Base install (app only)
+# Install package
 sudo dpkg -i build/omen-fan-control_*.deb
+```
 
-# Or: DKMS variant (app + auto DKMS)
-sudo dpkg -i build/omen-fan-control-dkms_*.deb
+Driver sources are bundled with the app. After installation, calibrate and install the permanent patch:
+```bash
+sudo omen-fan-control calibrate
+sudo omen-fan-control install-patch permanent
+sudo omen-fan-control service install
 ```
 
 ### Option D: Clone and run from source
@@ -155,6 +142,7 @@ cd omen-fan-control
 # With uv (recommended for source)
 uv sync
 sudo uv run omen-fan-control status
+sudo uv run omen-fan-control calibrate
 sudo uv run omen-fan-control install-patch permanent
 sudo uv run omen-fan-control service install
 sudo uv run omen-fan-control-gui
@@ -229,13 +217,18 @@ Commands provide detailed information when `--help` is passed with the command:
 omen-fan-control fan-control --help
 ```
 
-### Install Driver Patch
+### Calibrate & Install Driver Patch
+
+Most supported models do not report maximum fan RPM via BIOS queries. Running calibration first allows the utility to measure your hardware's actual fan limits and patch them into the driver source before building.
 
 ```bash
-# Permanent Installation (Recommended)
+# 1. Calibrate fan speeds (or calibrate via GUI)
+sudo omen-fan-control calibrate
+
+# 2. Permanent Installation with DKMS (Recommended)
 sudo omen-fan-control install-patch permanent
 
-# Temporary Installation (Until Reboot)
+# Or temporary installation (until reboot)
 sudo omen-fan-control install-patch temporary
 ```
 
@@ -295,7 +288,7 @@ This utility is part of an ongoing effort to bring more **OMEN Gaming Hub** feat
      ```bash
      sudo rm -rf ~/.local/share/uv/tools/omen-fan-control ~/.local/bin/omen-fan-control* /usr/local/bin/omen-fan-control*
      ```
-     >Note: Regular `uv tool remove` will likely fail with permission error  as `.pyc` files will be root-owned
+     >Note: Regular `uv tool uninstall` will likely fail with permission error  as `.pyc` files will be root-owned
    * **pipx:**
      ```bash
      pipx uninstall omen-fan-control

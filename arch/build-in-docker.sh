@@ -38,16 +38,11 @@ build_pkg() {
 }
 
 case "$PKG_TARGET" in
-    all)
+    all|omen-fan-control)
         build_pkg "$REPO_ROOT/arch/omen-fan-control"
-        build_pkg "$REPO_ROOT/arch/hp-wmi-omen"
-        build_pkg "$REPO_ROOT/arch/omen-fan-control-dkms"
-        ;;
-    omen-fan-control|hp-wmi-omen|omen-fan-control-dkms)
-        build_pkg "$REPO_ROOT/arch/$PKG_TARGET"
         ;;
     *)
-        echo "Usage: $0 [omen-fan-control|hp-wmi-omen|omen-fan-control-dkms|all]" >&2
+        echo "Usage: $0 [omen-fan-control|all]" >&2
         exit 1
         ;;
 esac

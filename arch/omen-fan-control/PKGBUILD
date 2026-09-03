@@ -1,5 +1,5 @@
 # Python application: CLI and GUI for HP Omen/Victus fan control
-# Install driver separately (hp-wmi-omen-dkms) or use "omen-fan-control install-patch" from this app.
+# Install driver with "omen-fan-control install-patch permanent" after running calibration.
 pkgname=omen-fan-control
 pkgver=1.0.0
 pkgrel=1
@@ -9,7 +9,7 @@ license=("GPL-3.0-or-later")
 arch=("any")
 depends=("python-click" "python-pyqt6")
 makedepends=("python-build" "python-installer" "python-hatchling")
-optdepends=("hp-wmi-omen-dkms: persist patched driver across kernel updates")
+optdepends=("dkms: persist patched driver across kernel updates via install-patch permanent")
 source=("PKGBUILD")
 sha256sums=("SKIP")
 

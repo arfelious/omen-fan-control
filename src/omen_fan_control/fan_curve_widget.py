@@ -82,17 +82,22 @@ class FanCurveEditor(QWidget):
         path.closeSubpath()
         
         gradient = QLinearGradient(self.margin, 0, self.margin + w, 0)
-        gradient.setColorAt(0, QColor(255, 220, 30, 100)) 
-        gradient.setColorAt(1, QColor(214, 51, 51, 100))
+        line_gradient = QLinearGradient(self.margin, 0, self.margin + w, 0)
+        
+        if getattr(self, "theme", "cpu") == "gpu":
+            gradient.setColorAt(0, QColor(0, 229, 255, 60)) 
+            gradient.setColorAt(1, QColor(0, 150, 255, 100))
+            line_gradient.setColorAt(0, QColor("#00e5ff")) 
+            line_gradient.setColorAt(1, QColor("#00a0ff"))
+        else:
+            gradient.setColorAt(0, QColor(255, 220, 30, 100)) 
+            gradient.setColorAt(1, QColor(214, 51, 51, 100))
+            line_gradient.setColorAt(0, QColor("#ff9800")) 
+            line_gradient.setColorAt(1, QColor("#d63333"))
         
         painter.setBrush(QBrush(gradient))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPath(path)
-        
-        # Line Gradient (Orange -> Red)
-        line_gradient = QLinearGradient(self.margin, 0, self.margin + w, 0)
-        line_gradient.setColorAt(0, QColor("#ff9800")) 
-        line_gradient.setColorAt(1, QColor("#d63333"))
         
         line_pen = QPen(QBrush(line_gradient), 3)
         line_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -258,6 +263,10 @@ class FanCurveEditor(QWidget):
              last = self.points[-1]
              if last.x() != self.max_temp:
                  self.points[-1] = QPointF(self.max_temp, last.y())
+        self.update()
+
+    def set_theme(self, theme: str = "cpu"):
+        self.theme = theme
         self.update()
         self.curveChanged.emit([(p.x(), p.y()) for p in self.points])
 

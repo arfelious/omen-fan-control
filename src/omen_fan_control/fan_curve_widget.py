@@ -85,10 +85,10 @@ class FanCurveEditor(QWidget):
         line_gradient = QLinearGradient(self.margin, 0, self.margin + w, 0)
         
         if getattr(self, "theme", "cpu") == "gpu":
-            gradient.setColorAt(0, QColor(0, 229, 255, 60)) 
-            gradient.setColorAt(1, QColor(0, 150, 255, 100))
-            line_gradient.setColorAt(0, QColor("#00e5ff")) 
-            line_gradient.setColorAt(1, QColor("#00a0ff"))
+            gradient.setColorAt(0, QColor(0, 220, 255, 120)) 
+            gradient.setColorAt(1, QColor(0, 100, 255, 60))
+            line_gradient.setColorAt(0, QColor("#0090ff")) 
+            line_gradient.setColorAt(1, QColor("#2060c0"))
         else:
             gradient.setColorAt(0, QColor(255, 220, 30, 100)) 
             gradient.setColorAt(1, QColor(214, 51, 51, 100))

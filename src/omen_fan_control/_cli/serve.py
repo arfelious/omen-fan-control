@@ -23,7 +23,15 @@ def serve() -> None:
         click.echo(f"Startup reverse mode check failed: {e}")
 
     ma_window = controller.config.get("ma_window", 5)
+    initial_temp = controller.get_reference_temp() or 40.0
+
+    # Half-buffer warmup: prefill floor(ma_window / 2) with baseline idle temp
+    # to dilute boot-time CPU bursts without overcrowding large windows.
     temp_history: list[float] = []
+    if initial_temp < 80.0:
+        seed_temp = min(float(initial_temp), 45.0)
+        prefill_count = int(ma_window) // 2
+        temp_history = [seed_temp] * prefill_count
 
     watchdog_interval = controller.config.get("watchdog_interval", 90)
     last_watchdog_time = time.time()
@@ -101,10 +109,11 @@ def serve() -> None:
                             click.echo(f"Failed to start automatic fan cleaning: {msg}")
 
             ma_window = controller.config.get("ma_window", 5)
-            temp_history.append(current_temp)
+            if current_temp is not None:
+                temp_history.append(float(current_temp))
             if len(temp_history) > ma_window:
                 temp_history.pop(0)
-            avg_temp = sum(temp_history) / len(temp_history)
+            avg_temp = sum(temp_history) / len(temp_history) if temp_history else (float(current_temp) if current_temp else 40.0)
 
             gpu_temp = controller.get_gpu_temp()
 

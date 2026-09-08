@@ -158,11 +158,13 @@ backup_drivers() {
 reload_driver() {
     echo "Reloading driver..."
     sudo depmod -a
+    sudo modprobe led_class_multicolor 2>/dev/null || true
     if sudo modprobe -r hp-wmi 2>/dev/null; then
         sudo modprobe hp-wmi
         echo "Driver reloaded successfully!"
     else
-        echo "Warning: Could not unload driver. A reboot may be required."
+        echo "Warning: Could not unload driver automatically (module in use)."
+        echo "Run 'sudo modprobe -r hp_wmi && sudo modprobe hp_wmi' or reboot to activate."
     fi
 }
 

@@ -312,4 +312,7 @@ Modifying kernel drivers and manipulating thermal control systems can potentiall
 **Linux 6.20 Kernel HP-WMI Driver:**
 - https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c
 
+**RGB Support for 4-zone and single-zone keyboards:**
+- https://lore.kernel.org/all/B3i0fyryR3yLLMsNVCrg3Q@aquinas.su/
+
 </details>

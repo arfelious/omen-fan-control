@@ -179,7 +179,7 @@ class DriverInstallerMixin:
             subprocess.run(["modprobe", "-r", "hp-wmi"], check=False)
 
             try:
-                deps = ["wmi", "rfkill", "hwmon", "platform_profile", "sparse_keymap", "acpi_ac"]
+                deps = ["wmi", "rfkill", "hwmon", "platform_profile", "sparse_keymap", "acpi_ac", "led_class_multicolor"]
                 for dep in deps:
                     subprocess.run(["modprobe", dep], check=False, capture_output=True)
 

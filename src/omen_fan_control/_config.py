@@ -205,11 +205,28 @@ def save_config(
     config.pop("fan_max", None)
     config.pop("manual_max_rpm", None)
 
-    with open(target_path, "w") as f:
-        json.dump(config, f, indent=4)
-        f.flush()
+    tmp_path = target_path.with_name(f".{target_path.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump(config, f, indent=4)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        os.replace(tmp_path, target_path)
+    except Exception:
         try:
-            import os
-            os.fsync(f.fileno())
-        except Exception:
-            pass
+            with open(target_path, "w") as f:
+                json.dump(config, f, indent=4)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except Exception:
+                    pass
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    pass

@@ -6,6 +6,7 @@ import struct
 import threading
 import time
 import re
+import fcntl
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -52,8 +53,9 @@ class FanCleanerMixin:
         self.log(msg, "ERROR")
 
     def log_cleaner(self, message: str, level: str = "DEBUG") -> None:
+        clean_msg = str(message).replace("\x00", "")
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        formatted = f"[{timestamp}] [CLEANER] {message}"
+        formatted = f"[{timestamp}] [CLEANER] {clean_msg}"
 
         target_level = LOG_LEVELS.get(str(self.config.get("log_level", "DEBUG")).upper(), 1)
         msg_level = LOG_LEVELS.get(str(level).upper(), 1)
@@ -80,6 +82,47 @@ class FanCleanerMixin:
                 except Exception as e:
                     return f"Error reading logs: {e}"
         return "No cleaner logs found yet."
+
+    def _get_cleaner_lock_path(self) -> Path:
+        try:
+            if os.geteuid() == 0 or os.access(VOLATILE_CONFIG_DIR, os.W_OK) or os.access(VOLATILE_CONFIG_DIR.parent, os.W_OK):
+                VOLATILE_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                return VOLATILE_CONFIG_DIR / ".cleaner.lock"
+        except Exception:
+            pass
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        return CONFIG_DIR / ".cleaner.lock"
+
+    def _acquire_cleaner_lock(self, timeout: float = 0.0) -> object | None:
+        try:
+            lock_path = self._get_cleaner_lock_path()
+            f = open(lock_path, "a+")
+            if timeout <= 0.0:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return f
+            else:
+                start = time.time()
+                while time.time() - start < timeout:
+                    try:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        return f
+                    except (BlockingIOError, IOError):
+                        time.sleep(0.08)
+                f.close()
+                return None
+        except (BlockingIOError, IOError):
+            return None
+        except Exception as e:
+            self.log_cleaner(f"Warning: could not acquire cleaner file lock: {e}")
+            return None
+
+    def _release_cleaner_lock(self, lock_handle: object | None) -> None:
+        if lock_handle is not None:
+            try:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+                lock_handle.close()
+            except Exception:
+                pass
 
     def cleaner_acpi_call(self, method_id: int, command: int, command_type: int, data_size: int, payload_bytes: list[int]) -> str:
         if not os.path.exists("/proc/acpi/call"):
@@ -197,21 +240,26 @@ class FanCleanerMixin:
         return res
 
     def check_cleaner_auto_stop(self) -> bool:
-        if self.config.get("cleaner_in_progress", False):
-            start_ts = self.config.get("cleaner_start_time")
-            if start_ts and (time.time() - start_ts >= 30):
-                self.stop_fan_cleaning()
+        controller = self  # type: FanController
+        cfg = controller.load_config()
+        if cfg.get("cleaner_in_progress", False):
+            start_ts = cfg.get("cleaner_start_time")
+            dur = cfg.get("cleaner_duration", 30)
+            if start_ts and (time.time() - start_ts >= dur):
+                # Run asynchronously so GUI main thread is NEVER blocked
+                threading.Thread(target=self.stop_fan_cleaning, daemon=True).start()
                 return True
         return False
 
     def is_reverse_mode_active(self) -> bool:
         self.check_cleaner_auto_stop()
 
-        if self.config.get("cleaner_in_progress", False):
+        controller: FanController = self
+        cfg = controller.load_config()
+        if cfg.get("cleaner_in_progress", False):
             return True
 
         try:
-            controller: FanController = self
             val1 = controller.read_sys_file(controller.fan1_input_path)
             val2 = controller.read_sys_file(controller.fan2_input_path)
             if (val1 and int(val1) >= 12800) or (val2 and int(val2) >= 12800):
@@ -226,33 +274,43 @@ class FanCleanerMixin:
 
         controller = self  # type: FanController
 
-        if controller.config.get("cleaner_in_progress", False) or controller.config.get("cleaner_transitioning", False):
-            self.log_cleaner("START REJECTED -> Fan cleaning cycle is already in progress.")
-            return False, "Fan cleaning cycle is already in progress."
-
-        temp = controller.get_reference_temp()
-        if temp is not None and temp > 70:
-            self.log_cleaner(f"START ABORTED -> Temperature too high ({temp}°C > 70°C)")
-            return False, f"Temperature too high ({temp}°C > 70°C). Cannot start fan cleaning."
-
-        caps = self.detect_cleaner_capabilities()
-        mode = "modern" if caps["modern"]["supported"] else ("legacy" if caps["legacy"] else "modern")
-        self.log_cleaner(f"CHOSEN CLEANER MODE -> {mode.upper()}")
-
-        orig_mode = controller.config.get("mode", "auto")
-        orig_manual = controller.config.get("manual_pwm", -1)
-
-        controller.config["cleaner_in_progress"] = False
-        controller.config["cleaner_transitioning"] = True
-        controller.config["cleaner_start_time"] = None
-        controller.config["cleaner_orig_mode"] = orig_mode
-        controller.config["cleaner_orig_manual"] = orig_manual
-        controller.config["cleaner_mode"] = mode
-
-        controller.save_config()
-        controller.save_config(volatile=True)
+        lock_handle = self._acquire_cleaner_lock(timeout=0.0)
+        if lock_handle is None:
+            self.log_cleaner("START REJECTED -> Cleaner operation currently locked by another process.")
+            return False, "Cleaner operation currently in progress in another process."
 
         try:
+            cfg = controller.load_config()
+            if cfg.get("cleaner_in_progress", False) or cfg.get("cleaner_transitioning", False):
+                self.log_cleaner("START REJECTED -> Fan cleaning cycle is already in progress.")
+                return False, "Fan cleaning cycle is already in progress."
+
+            temp = controller.get_reference_temp()
+            if temp is not None and temp > 75:
+                controller.config["cleaner_last_status"] = f"Blocked: CPU temp too high ({temp}°C > 75°C)"
+                controller.config["cleaner_last_status_ts"] = time.time()
+                controller.save_config()
+                controller.save_config(volatile=True)
+                self.log_cleaner(f"START ABORTED -> Temperature too high ({temp}°C > 75°C)")
+                return False, f"Temperature too high ({temp}°C > 75°C). Cannot start fan cleaning."
+
+            caps = self.detect_cleaner_capabilities()
+            mode = "modern" if caps["modern"]["supported"] else ("legacy" if caps["legacy"] else "modern")
+            self.log_cleaner(f"CHOSEN CLEANER MODE -> {mode.upper()}")
+
+            orig_mode = controller.config.get("mode", "auto")
+            orig_manual = controller.config.get("manual_pwm", -1)
+
+            controller.config["cleaner_in_progress"] = False
+            controller.config["cleaner_transitioning"] = True
+            controller.config["cleaner_start_time"] = None
+            controller.config["cleaner_orig_mode"] = orig_mode
+            controller.config["cleaner_orig_manual"] = orig_manual
+            controller.config["cleaner_mode"] = mode
+
+            controller.save_config()
+            controller.save_config(volatile=True)
+
             if mode == "legacy":
                 self.log_cleaner("EXECUTING LEGACY START SEQUENCE...")
                 raw_resp = self.cleaner_acpi_call(method_id=2, command=1, command_type=44, data_size=4, payload_bytes=[0]*4)
@@ -294,8 +352,13 @@ class FanCleanerMixin:
                 payload[2] = 128 if caps["modern"]["fan3"] else 0
                 self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
 
+                braked_successfully = False
                 start_wait = time.time()
-                while time.time() - start_wait < 4.0:
+                max_brake_time = 7.0
+
+                tag1 = "0"
+                tag2 = "0"
+                while time.time() - start_wait < max_brake_time:
                     val1 = controller.read_sys_file(controller.fan1_input_path)
                     val2 = controller.read_sys_file(controller.fan2_input_path)
                     rpm1, is_rev1 = controller.parse_hwmon_rpm(val1)
@@ -306,8 +369,18 @@ class FanCleanerMixin:
                     self.log_cleaner(f"STEP 1 BRAKING -> fan1={tag1} RPM, fan2={tag2} RPM")
                     if rpm1 < 300 and rpm2 < 300:
                         self.log_cleaner(f"Braked to 0 RPM (fan1={tag1}, fan2={tag2}) in {time.time()-start_wait:.1f}s")
+                        braked_successfully = True
                         break
                     time.sleep(0.3)
+
+                if not braked_successfully:
+                    self.log_cleaner(
+                        f"ABORT: Fans failed to brake below 300 RPM within {max_brake_time:.1f}s "
+                        f"(fan1={tag1} RPM, fan2={tag2} RPM). Cancelling reverse sequence for motor protection!"
+                    )
+                    self.emergency_stop_fan_cleaning()
+                    return False, f"Fans could not be braked to a stop ({tag1} / {tag2} RPM). Reversal aborted for hardware safety."
+
                 time.sleep(0.3)
 
                 cpu_val = cpu_speed_val + 128
@@ -343,20 +416,42 @@ class FanCleanerMixin:
 
                 def _bg_auto_stop() -> None:
                     start_timer = time.time()
-                    while time.time() - start_timer < 30:
-                        time.sleep(3.0)
-                        if not controller.config.get("cleaner_in_progress", False) or controller.config.get("cleaner_cycle_id") != cycle_id:
+                    dur = controller.load_config().get("cleaner_duration", 30)
+                    temp_history: list[float] = []
+                    while time.time() - start_timer < dur:
+                        time.sleep(1.0)
+                        cfg = controller.load_config()
+                        if not cfg.get("cleaner_in_progress", False) or cfg.get("cleaner_cycle_id") != cycle_id:
                             return
+                        t = controller.get_reference_temp()
+                        if t is not None:
+                            temp_history.append(float(t))
+                            ma_window = cfg.get("ma_window", 5)
+                            if len(temp_history) > ma_window:
+                                temp_history.pop(0)
+
+                            if len(temp_history) >= 3:
+                                avg_temp = sum(temp_history) / len(temp_history)
+                                if avg_temp > 75:
+                                    msg = f"Stopped early: CPU reached {avg_temp:.1f}°C (> 75°C)"
+                                    self.log_cleaner(f"SAFETY ABORT: {msg} (history: {[round(x, 1) for x in temp_history]}). Aborting reverse mode!")
+                                    self.stop_fan_cleaning(reason=msg)
+                                    return
+
                         r1, rev1 = controller.parse_hwmon_rpm(controller.read_sys_file(controller.fan1_input_path))
                         r2, rev2 = controller.parse_hwmon_rpm(controller.read_sys_file(controller.fan2_input_path))
                         tag1 = f"-{r1}" if rev1 else f"{r1}"
                         tag2 = f"-{r2}" if rev2 else f"{r2}"
-                        rem = max(0, int(30 - (time.time() - start_timer)))
-                        self.log_cleaner(f"LIVE REVERSE STATUS ({rem}s remaining) -> Fan1: {tag1} RPM, Fan2: {tag2} RPM")
+                        rem = max(0, int(dur - (time.time() - start_timer)))
+                        if int(time.time() - start_timer) % 3 == 0:
+                            avg_str = f"{sum(temp_history)/len(temp_history):.1f}°C" if temp_history else "?°C"
+                            raw_str = f"{t}°C" if t is not None else "?°C"
+                            self.log_cleaner(f"LIVE REVERSE STATUS ({rem}s remaining) -> Temp: {raw_str} (avg: {avg_str}), Fan1: {tag1} RPM, Fan2: {tag2} RPM")
 
-                    if controller.config.get("cleaner_in_progress", False) and controller.config.get("cleaner_cycle_id") == cycle_id:
-                        self.log_cleaner("30-Second Auto-Stop Timer Fired -> Stopping cleaner...")
-                        self.stop_fan_cleaning()
+                    cfg = controller.load_config()
+                    if cfg.get("cleaner_in_progress", False) and cfg.get("cleaner_cycle_id") == cycle_id:
+                        self.log_cleaner("Auto-Stop Timer Fired -> Stopping cleaner...")
+                        self.stop_fan_cleaning(reason=f"Completed ({dur}s)")
 
                 threading.Thread(target=_bg_auto_stop, daemon=True).start()
 
@@ -366,166 +461,236 @@ class FanCleanerMixin:
             self.log_cleaner(f"START SEQUENCE FAILED -> {e}. Rolling back to forwards mode!")
             self.emergency_stop_fan_cleaning()
             return False, f"Fan cleaning sequence failed: {e}"
+        finally:
+            self._release_cleaner_lock(lock_handle)
 
-    def stop_fan_cleaning(self) -> tuple[bool, str]:
-        self.log_cleaner("STOP CLEANING REQUESTED")
+    def stop_fan_cleaning(self, reason: str | None = None) -> tuple[bool, str]:
+        controller = self  # type: FanController
+        dur = controller.config.get("cleaner_duration", 30)
+        status_msg = reason or f"Completed ({dur}s)"
+        self.log_cleaner(f"STOP CLEANING REQUESTED -> Reason: {status_msg}")
+
+        if not controller.config.get("cleaner_in_progress", False) and not controller.config.get("cleaner_transitioning", False):
+            self.log_cleaner("STOP SKIPPED -> Cleaner is not active.")
+            return True, "Cleaner is not active."
+
+        lock_handle = self._acquire_cleaner_lock(timeout=0.0)
+        if lock_handle is None:
+            self.log_cleaner("STOP SKIPPED -> Another process is already executing stop sequence.")
+            return True, "Stop already in progress by another process."
+
+        try:
+            mode = controller.config.get("cleaner_mode", "modern")
+            orig_mode = controller.config.get("cleaner_orig_mode", "auto")
+
+            if mode == "legacy":
+                try:
+                    self.log_cleaner("EXECUTING LEGACY STOP SEQUENCE...")
+                    raw_resp = self.cleaner_acpi_call(method_id=2, command=1, command_type=44, data_size=4, payload_bytes=[0]*4)
+                    success, info, data = self.cleaner_parse_response(raw_resp)
+                    if success and isinstance(info, dict) and info.get("code") == 0:
+                        buf = data[:4]
+                        buf[3] = (buf[3] | 0x02) & 0x7F
+                        self.cleaner_acpi_call(method_id=2, command=2, command_type=44, data_size=4, payload_bytes=buf)
+                except Exception as e:
+                    self.log_cleaner(f"LEGACY STOP ERROR -> {e}")
+            else:
+                try:
+                    self.log_cleaner("EXECUTING MODERN STOP SEQUENCE...")
+                    caps = self.detect_cleaner_capabilities()
+                    fan3_supported = caps["modern"]["fan3"]
+                    current_speed = 0
+                    raw_resp = self.cleaner_acpi_call(method_id=3, command=131080, command_type=44, data_size=128, payload_bytes=[0]*128)
+                    q_success, q_info, q_data = self.cleaner_parse_response(raw_resp)
+                    if q_success and isinstance(q_info, dict) and q_info.get("sig") == "PASS" and q_info.get("code") == 0 and len(q_data) > 2:
+                        if q_data[0] & 0x80:
+                            current_speed = q_data[0] - 128
+
+                    if current_speed > 0:
+                        decel_steps = list(range(current_speed, 0, -5)) + [0]
+                        self.log_cleaner(f"Decelerating in reverse: {decel_steps}...")
+                        for s in decel_steps:
+                            payload = [0] * 128
+                            payload[0] = s + 128
+                            payload[1] = s + 128
+                            payload[2] = (s + 128) if fan3_supported else 0
+                            self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
+                            time.sleep(0.15)
+
+                    self.log_cleaner("Releasing CleanCreek override [0, 0, 0]...")
+                    payload = [0] * 128
+                    self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
+                    time.sleep(1.5)
+
+                    # Wait for fans to settle at 0 RPM to ensure zero residual reverse momentum
+                    start_settle = time.time()
+                    while time.time() - start_settle < 3.0:
+                        val1 = controller.read_sys_file(controller.fan1_input_path)
+                        val2 = controller.read_sys_file(controller.fan2_input_path)
+                        rpm1, is_rev1 = controller.parse_hwmon_rpm(val1)
+                        rpm2, is_rev2 = controller.parse_hwmon_rpm(val2)
+                        if (not is_rev1 and rpm1 < 300) and (not is_rev2 and rpm2 < 300):
+                            break
+                        time.sleep(0.25)
+                except Exception as e:
+                    self.log_cleaner(f"MODERN STOP ERROR -> {e}")
+
+            controller.config["cleaner_in_progress"] = False
+            controller.config["cleaner_transitioning"] = False
+            controller.config["cleaner_last_run"] = time.time()
+            controller.config["cleaner_last_status"] = status_msg
+            controller.config["cleaner_last_status_ts"] = time.time()
+            controller.config.pop("cleaner_start_time", None)
+            controller.config.pop("cleaner_cycle_id", None)
+            controller.config.pop("cleaner_orig_mode", None)
+            controller.config.pop("cleaner_orig_manual", None)
+            controller.config.pop("cleaner_mode", None)
+            controller.save_config()
+            controller.save_config(volatile=True)
+
+            controller.config["mode"] = orig_mode
+            controller.save_config()
+            self._release_cleaner_lock(lock_handle)
+            lock_handle = None
+
+            self.apply_post_cleaner_mode()
+            self.log_cleaner(f"CLEANER STOP COMPLETE -> Restored mode: '{orig_mode}'")
+            return True, "Fan cleaning stopped."
+        finally:
+            self._release_cleaner_lock(lock_handle)
+
+    def emergency_stop_fan_cleaning(self, reason: str = "Stopped manually by user") -> tuple[bool, str]:
+        self.log_cleaner(f"EMERGENCY STOP REQUESTED! -> Reason: {reason}")
         controller = self  # type: FanController
 
-        mode = controller.config.get("cleaner_mode", "modern")
-        orig_mode = controller.config.get("cleaner_orig_mode", "auto")
+        lock_handle = self._acquire_cleaner_lock(timeout=1.0)
+        try:
+            mode = controller.config.get("cleaner_mode", "modern")
+            orig_mode = controller.config.get("cleaner_orig_mode", controller.config.get("mode", "auto"))
 
-        if mode == "legacy":
-            try:
-                self.log_cleaner("EXECUTING LEGACY STOP SEQUENCE...")
-                raw_resp = self.cleaner_acpi_call(method_id=2, command=1, command_type=44, data_size=4, payload_bytes=[0]*4)
-                success, info, data = self.cleaner_parse_response(raw_resp)
-                if success and isinstance(info, dict) and info.get("code") == 0:
-                    buf = data[:4]
-                    buf[3] = (buf[3] | 0x02) & 0x7F
-                    self.cleaner_acpi_call(method_id=2, command=2, command_type=44, data_size=4, payload_bytes=buf)
-            except Exception as e:
-                self.log_cleaner(f"LEGACY STOP ERROR -> {e}")
-        else:
-            try:
-                self.log_cleaner("EXECUTING MODERN STOP SEQUENCE...")
-                caps = self.detect_cleaner_capabilities()
-                fan3_supported = caps["modern"]["fan3"]
-                current_speed = 37
-                raw_resp = self.cleaner_acpi_call(method_id=3, command=131080, command_type=44, data_size=128, payload_bytes=[0]*128)
-                q_success, q_info, q_data = self.cleaner_parse_response(raw_resp)
-                if q_success and isinstance(q_info, dict) and q_info.get("sig") == "PASS" and q_info.get("code") == 0 and len(q_data) > 2:
-                    if q_data[0] & 0x80:
-                        current_speed = q_data[0] - 128
+            if mode == "modern" and os.path.exists("/proc/acpi/call"):
+                try:
+                    caps = self.detect_cleaner_capabilities()
+                    fan3_supported = caps["modern"]["fan3"]
+                    raw_resp = self.cleaner_acpi_call(method_id=3, command=131080, command_type=44, data_size=128, payload_bytes=[0]*128)
+                    success, info, data = self.cleaner_parse_response(raw_resp)
+                    current_speed = 0
+                    if success and isinstance(info, dict) and info.get("sig") == "PASS" and info.get("code") == 0 and len(data) > 2:
+                        if data[0] & 0x80:
+                            current_speed = data[0] - 128
 
-                decel_steps = list(range(current_speed, 0, -5)) + [0]
-                self.log_cleaner(f"Decelerating in reverse: {decel_steps}...")
-                for s in decel_steps:
+                    if current_speed > 0:
+                        decel_steps = list(range(current_speed, 0, -5)) + [0]
+                        self.log_cleaner(f"Emergency decelerating in reverse: {decel_steps}...")
+                        for s in decel_steps:
+                            payload = [0] * 128
+                            payload[0] = s + 128
+                            payload[1] = s + 128
+                            payload[2] = (s + 128) if fan3_supported else 0
+                            self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
+                            time.sleep(0.12)
+                except Exception as e:
+                    self.log_cleaner(f"EMERGENCY STOP DECEL ERROR -> {e}")
+
+            if mode == "legacy":
+                try:
+                    raw_resp = self.cleaner_acpi_call(method_id=2, command=1, command_type=44, data_size=4, payload_bytes=[0]*4)
+                    success, info, data = self.cleaner_parse_response(raw_resp)
+                    if success and isinstance(info, dict) and info.get("code") == 0:
+                        buf = data[:4]
+                        buf[3] = (buf[3] | 0x02) & 0x7F
+                        self.cleaner_acpi_call(method_id=2, command=2, command_type=44, data_size=4, payload_bytes=buf)
+                except Exception as e:
+                    self.log_cleaner(f"LEGACY EMERGENCY STOP ERROR -> {e}")
+            else:
+                try:
                     payload = [0] * 128
-                    payload[0] = s + 128
-                    payload[1] = s + 128
-                    payload[2] = (s + 128) if fan3_supported else 0
                     self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
-                    time.sleep(0.15)
+                    time.sleep(1.5)
 
-                self.log_cleaner("Releasing CleanCreek override [0, 0, 0]...")
-                payload = [0] * 128
-                self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
-                time.sleep(2.0)
-            except Exception as e:
-                self.log_cleaner(f"MODERN STOP ERROR -> {e}")
+                    # Wait for fans to settle at 0 RPM
+                    start_settle = time.time()
+                    while time.time() - start_settle < 2.5:
+                        val1 = controller.read_sys_file(controller.fan1_input_path)
+                        val2 = controller.read_sys_file(controller.fan2_input_path)
+                        rpm1, is_rev1 = controller.parse_hwmon_rpm(val1)
+                        rpm2, is_rev2 = controller.parse_hwmon_rpm(val2)
+                        if (not is_rev1 and rpm1 < 300) and (not is_rev2 and rpm2 < 300):
+                            break
+                        time.sleep(0.2)
+                except Exception as e:
+                    self.log_cleaner(f"MODERN EMERGENCY STOP ERROR -> {e}")
 
-        controller.config["cleaner_in_progress"] = False
-        controller.config["cleaner_transitioning"] = False
-        controller.config["cleaner_last_run"] = time.time()
-        controller.config.pop("cleaner_start_time", None)
-        controller.config.pop("cleaner_cycle_id", None)
-        controller.config.pop("cleaner_orig_mode", None)
-        controller.config.pop("cleaner_orig_manual", None)
-        controller.config.pop("cleaner_mode", None)
-        controller.save_config()
-        controller.save_config(volatile=True)
+            controller.config["cleaner_in_progress"] = False
+            controller.config["cleaner_transitioning"] = False
+            controller.config["cleaner_last_run"] = time.time()
+            controller.config["cleaner_last_status"] = reason
+            controller.config["cleaner_last_status_ts"] = time.time()
+            controller.config.pop("cleaner_start_time", None)
+            controller.config.pop("cleaner_cycle_id", None)
+            controller.config.pop("cleaner_orig_mode", None)
+            controller.config.pop("cleaner_orig_manual", None)
+            controller.config.pop("cleaner_mode", None)
+            controller.save_config()
+            controller.save_config(volatile=True)
 
-        controller.config["mode"] = orig_mode
-        controller.save_config()
-        self.apply_post_cleaner_mode()
-        self.log_cleaner(f"CLEANER STOP COMPLETE -> Restored mode: '{orig_mode}'")
-        return True, "Fan cleaning stopped."
+            controller.config["mode"] = orig_mode
+            controller.save_config()
+            self._release_cleaner_lock(lock_handle)
+            lock_handle = None
 
-    def emergency_stop_fan_cleaning(self) -> tuple[bool, str]:
-        self.log_cleaner("EMERGENCY STOP REQUESTED!")
-        controller = self  # type: FanController
-
-        mode = controller.config.get("cleaner_mode", "modern")
-        orig_mode = controller.config.get("cleaner_orig_mode", controller.config.get("mode", "auto"))
-
-        if mode == "modern" and os.path.exists("/proc/acpi/call"):
-            try:
-                caps = self.detect_cleaner_capabilities()
-                fan3_supported = caps["modern"]["fan3"]
-                raw_resp = self.cleaner_acpi_call(method_id=3, command=131080, command_type=44, data_size=128, payload_bytes=[0]*128)
-                success, info, data = self.cleaner_parse_response(raw_resp)
-                current_speed = 37
-                if success and isinstance(info, dict) and info.get("sig") == "PASS" and info.get("code") == 0 and len(data) > 2:
-                    if data[0] & 0x80:
-                        current_speed = data[0] - 128
-
-                decel_steps = list(range(current_speed, 0, -5)) + [0]
-                self.log_cleaner(f"Emergency decelerating in reverse: {decel_steps}...")
-                for s in decel_steps:
-                    payload = [0] * 128
-                    payload[0] = s + 128
-                    payload[1] = s + 128
-                    payload[2] = (s + 128) if fan3_supported else 0
-                    self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
-                    time.sleep(0.12)
-            except Exception as e:
-                self.log_cleaner(f"EMERGENCY STOP DECEL ERROR -> {e}")
-
-        if mode == "legacy":
-            try:
-                raw_resp = self.cleaner_acpi_call(method_id=2, command=1, command_type=44, data_size=4, payload_bytes=[0]*4)
-                success, info, data = self.cleaner_parse_response(raw_resp)
-                if success and isinstance(info, dict) and info.get("code") == 0:
-                    buf = data[:4]
-                    buf[3] = (buf[3] | 0x02) & 0x7F
-                    self.cleaner_acpi_call(method_id=2, command=2, command_type=44, data_size=4, payload_bytes=buf)
-            except Exception as e:
-                self.log_cleaner(f"LEGACY EMERGENCY STOP ERROR -> {e}")
-        else:
-            try:
-                payload = [0] * 128
-                self.cleaner_acpi_call(method_id=3, command=131080, command_type=46, data_size=128, payload_bytes=payload)
-                time.sleep(2.0)
-            except Exception as e:
-                self.log_cleaner(f"MODERN EMERGENCY STOP ERROR -> {e}")
-
-        controller.config["cleaner_in_progress"] = False
-        controller.config["cleaner_transitioning"] = False
-        controller.config.pop("cleaner_start_time", None)
-        controller.config.pop("cleaner_cycle_id", None)
-        controller.config.pop("cleaner_orig_mode", None)
-        controller.config.pop("cleaner_orig_manual", None)
-        controller.config.pop("cleaner_mode", None)
-        controller.save_config()
-        controller.save_config(volatile=True)
-
-        controller.config["mode"] = orig_mode
-        controller.save_config()
-        self.apply_post_cleaner_mode()
-        self.log_cleaner(f"EMERGENCY STOP COMPLETE -> Restored mode: '{orig_mode}'")
-        return True, "Emergency stop completed. Fans restored to forwards mode."
+            self.apply_post_cleaner_mode()
+            self.log_cleaner(f"EMERGENCY STOP COMPLETE -> Restored mode: '{orig_mode}'")
+            return True, "Emergency stop completed. Fans restored to forwards mode."
+        finally:
+            self._release_cleaner_lock(lock_handle)
 
     def apply_post_cleaner_mode(self) -> None:
         controller = self  # type: FanController
         mode = controller.config.get("mode", "auto")
         self.log_cleaner(f"APPLY POST CLEANER MODE -> Target mode: '{mode}'")
         try:
-            if mode == "manual":
-                target_pwm = controller.config.get("manual_pwm", 128)
-            elif mode == "curve":
-                temp = controller.get_reference_temp()
-                target_pwm = controller.calculate_target_pwm(temp) if temp else 128
-            else:
-                temp = controller.get_reference_temp()
-                target_pwm = controller.calculate_target_pwm(temp) if temp else 120
-
-            if target_pwm is None or target_pwm < 0:
-                target_pwm = 120
-
-            self.log_cleaner(f"FORWARD RAMP UP -> Ramping PWM from 30 up to {target_pwm}...")
-
-            if target_pwm > 40:
-                for pwm_step in range(30, target_pwm, 25):
-                    controller.set_fan_pwm(pwm_step)
-                    time.sleep(0.25)
+            # Soft-start forward rotation at quiet idle speed (PWM 35 ~1500-1800 RPM)
+            # to prime the bearings and establish forward airflow gently without acoustic shock.
+            self.log_cleaner("SOFT START -> Priming gentle forward airflow at baseline PWM 35...")
+            controller.set_fan_pwm(35)
+            time.sleep(1.0)
 
             if mode == "auto":
+                # In auto mode, transition directly to EC automatic thermal curve
                 controller.set_fan_mode("auto")
                 self.log_cleaner("RESTORED -> EC Automatic Fan Curve (pwm1_enable=2)")
             elif mode == "max":
+                # For max mode, ramp smoothly up in steps of 15
+                self.log_cleaner("FORWARD RAMP UP -> Smoothly ramping up to Max mode...")
+                for pwm_step in range(45, 255, 15):
+                    controller.set_fan_pwm(pwm_step)
+                    time.sleep(0.12)
                 controller.set_fan_mode("max")
                 self.log_cleaner("RESTORED -> Max Speed Mode (pwm1_enable=0)")
             elif mode in ["manual", "curve"]:
+                if mode == "manual":
+                    target_pwm = controller.config.get("manual_pwm", 100)
+                else:
+                    # Provide 1.5 seconds of quiet forward cooldown at PWM 40 to allow
+                    # airflow to stabilize and temper heat before ramping to curve target.
+                    self.log_cleaner("COOLING STABILIZATION -> 1.5s gentle forward cooldown at PWM 40...")
+                    controller.set_fan_pwm(40)
+                    time.sleep(1.5)
+                    temp = controller.get_reference_temp()
+                    target_pwm = controller.calculate_target_pwm(temp) if temp else 80
+
+                if target_pwm is None or target_pwm < 0:
+                    target_pwm = 80
+
+                target_pwm = min(max(int(target_pwm), 35), 255)
+                self.log_cleaner(f"FORWARD RAMP UP -> Smoothly ramping from 40 up to target PWM {target_pwm}...")
+
+                if target_pwm > 40:
+                    for pwm_step in range(45, target_pwm, 8):
+                        controller.set_fan_pwm(pwm_step)
+                        time.sleep(0.12)
+
                 controller.set_fan_pwm(target_pwm)
                 self.log_cleaner(f"RESTORED -> {mode.capitalize()} Mode (pwm1_enable=1, PWM={target_pwm})")
             else:

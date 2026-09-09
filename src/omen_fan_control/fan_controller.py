@@ -161,7 +161,7 @@ class FanController(
         rpm1, is_rev1 = self.parse_hwmon_rpm(val1)
         rpm2, is_rev2 = self.parse_hwmon_rpm(val2)
 
-        is_reverse = is_rev1 or is_rev2 or self.config.get("cleaner_in_progress", False)
+        is_reverse = is_rev1 or is_rev2
         return max(rpm1, rpm2), is_reverse
 
     def get_both_fan_speeds(self) -> list[tuple[str, int, bool]]:
@@ -171,10 +171,9 @@ class FanController(
         rpm1, is_rev1 = self.parse_hwmon_rpm(val1)
         rpm2, is_rev2 = self.parse_hwmon_rpm(val2)
 
-        is_cleaner = self.config.get("cleaner_in_progress", False)
         return [
-            ("Fan 1 (CPU)", rpm1, is_rev1 or is_cleaner),
-            ("Fan 2 (GPU)", rpm2, is_rev2 or is_cleaner),
+            ("Fan 1 (CPU)", rpm1, is_rev1),
+            ("Fan 2 (GPU)", rpm2, is_rev2),
         ]
 
     def get_cpu_temp(self) -> int:

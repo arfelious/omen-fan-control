@@ -112,6 +112,9 @@ class MainWindow(QMainWindow):
         self.init_options_page()
         self.init_about_page()
         
+        self._manual_cleaning_initiated = False
+        self._cleaner_alerted_status_ts = 0.0
+
         # Initialize cleaner page if system/board supports Fan Cleaner
         if self.controller.check_fan_cleaner_capability():
             self.init_cleaner_page()
@@ -136,7 +139,7 @@ class MainWindow(QMainWindow):
         
         self.rpm_timer = QTimer()
         self.rpm_timer.timeout.connect(self.update_status)
-        self.rpm_timer.start(2000)
+        self.rpm_timer.start(1000)
         self.update_status()
 
         self.update_cursors()
@@ -1349,6 +1352,7 @@ class MainWindow(QMainWindow):
 
     # Core Logic
     def update_status(self, temp_override=None):
+        self.controller.config = self.controller.load_config()
         rpm, in_reverse = self.controller.get_fan_speed_info()
         if temp_override is not None:
              temp = int(temp_override)
@@ -1524,7 +1528,7 @@ class MainWindow(QMainWindow):
             return
 
         if self.mode_combo.currentText() == "Curve":
-            self.curve_timer.start(2000)
+            self.curve_timer.start(1000)
         else:
             self.curve_timer.stop()
 
@@ -2248,8 +2252,39 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Ensure clean shutdown of threads and processes."""
-        if self.controller.config.get("cleaner_in_progress", False):
-            self.controller.emergency_stop_fan_cleaning()
+        cleaner_active = (
+            self.controller.config.get("cleaner_in_progress", False)
+            or self.controller.config.get("cleaner_transitioning", False)
+        )
+        if cleaner_active:
+            if self.controller.is_service_running():
+                reply = QMessageBox.question(
+                    self,
+                    "Fan Cleaning in Progress",
+                    "A fan cleaning cycle is currently in progress.\n\n"
+                    "The background service will automatically finish the cleaning cycle and safely restore fans to normal.\n\n"
+                    "Do you want to close the window now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+            else:
+                reply = QMessageBox.warning(
+                    self,
+                    "Fan Cleaning in Progress",
+                    "A fan cleaning cycle is currently in progress, but the background service is NOT running.\n\n"
+                    "Closing the application will abort the cleaning cycle and safely restore fans to forward mode.\n\n"
+                    "Do you want to stop cleaning and exit?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+                self.controller.emergency_stop_fan_cleaning()
+
         self.controller.stop_stress_test()
         self.watchdog_timer.stop()
         self.rpm_timer.stop()
@@ -2378,7 +2413,7 @@ class MainWindow(QMainWindow):
         status_card.setObjectName("statusCard")
         status_card.setStyleSheet("QFrame#statusCard { background-color: #1a1a1a; border-radius: 8px; border: 1px solid #333; }")
         status_card_layout = QHBoxLayout(status_card)
-        status_card_layout.setContentsMargins(14, 10, 14, 10)
+        status_card_layout.setContentsMargins(14, 14, 14, 14)
         status_card_layout.setSpacing(20)
 
         # Direction badge
@@ -2411,7 +2446,7 @@ class MainWindow(QMainWindow):
         elapsed_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cleaner_elapsed_lbl = QLabel("Idle")
         self.cleaner_elapsed_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cleaner_elapsed_lbl.setStyleSheet("color: #fff; font-size: 13px; font-weight: bold; padding: 2px;")
+        self.cleaner_elapsed_lbl.setStyleSheet("color: #fff; font-size: 12px; font-weight: bold; padding: 2px 4px; min-height: 20px;")
         elapsed_col.addWidget(elapsed_title)
         elapsed_col.addWidget(self.cleaner_elapsed_lbl)
         status_card_layout.addLayout(elapsed_col)
@@ -2460,7 +2495,7 @@ class MainWindow(QMainWindow):
         c_layout.addLayout(btn_layout)
         
         # Safety warning note
-        warn_lbl = QLabel("Safety Note: Fan cleaning does not run if CPU temperature is above 70°C.\n"
+        warn_lbl = QLabel("Safety Note: Fan cleaning does not run if CPU temperature is above 75°C (thermal safety limit).\n"
                           "In case of emergency or unexpected behavior, use the Stop button to restore functionality safely.")
         warn_lbl.setWordWrap(True)
         warn_lbl.setStyleSheet("color: #e65100; font-size: 10px; font-weight: bold;")
@@ -2581,13 +2616,24 @@ class MainWindow(QMainWindow):
 
     def start_manual_cleaning(self):
         import threading
+        self._manual_cleaning_initiated = True
+        if hasattr(self, "manual_clean_btn"):
+            self.manual_clean_btn.setEnabled(False)
+
         def _bg_start():
             success, msg = self.controller.start_fan_cleaning()
             if not success:
                 print(f"[GUI] Cannot start cleaner: {msg}")
+                QTimer.singleShot(0, lambda: self._on_manual_start_failed(msg))
         
         threading.Thread(target=_bg_start, daemon=True).start()
         self.update_status()
+
+    def _on_manual_start_failed(self, msg: str):
+        self._manual_cleaning_initiated = False
+        if hasattr(self, "manual_clean_btn"):
+            self.manual_clean_btn.setEnabled(True)
+        QMessageBox.warning(self, "Fan Cleaning Blocked", f"Cannot start fan cleaning:\n\n{msg}")
 
     def auto_stop_manual_cleaning(self):
         import threading
@@ -2596,6 +2642,7 @@ class MainWindow(QMainWindow):
 
     def emergency_stop_cleaning(self):
         import threading
+        self._manual_cleaning_initiated = False
         threading.Thread(target=self.controller.emergency_stop_fan_cleaning, daemon=True).start()
         self.update_status()
 
@@ -2624,25 +2671,46 @@ class MainWindow(QMainWindow):
                 "background: #1b3a1e; border-radius: 4px; padding: 4px 10px;"
             )
 
-        # --- Current attempt elapsed time ---
         in_progress = self.controller.config.get("cleaner_in_progress", False)
+        transitioning = self.controller.config.get("cleaner_transitioning", False)
         start_ts = self.controller.config.get("cleaner_start_time")
-        if in_progress and start_ts is None:
+        last_status = self.controller.config.get("cleaner_last_status")
+        last_status_ts = self.controller.config.get("cleaner_last_status_ts", 0.0)
+
+        # If a manually initiated run ended, alert if stopped early
+        if not in_progress and not transitioning and getattr(self, "_manual_cleaning_initiated", False):
+            self._manual_cleaning_initiated = False
+            if last_status and ("Stopped early" in last_status or "Blocked" in last_status or "Aborted" in last_status):
+                if last_status_ts > getattr(self, "_cleaner_alerted_status_ts", 0.0):
+                    self._cleaner_alerted_status_ts = last_status_ts
+                    QTimer.singleShot(0, lambda s=last_status: QMessageBox.warning(
+                        self,
+                        "Fan Cleaning Stopped Early",
+                        f"Manual fan cleaning stopped early:\n\n{s}\n\nFans have restored forward operation for hardware protection."
+                    ))
+
+        # --- Current attempt elapsed time ---
+        if transitioning and not in_progress:
+            self.cleaner_elapsed_lbl.setText("Braking...")
+            self.cleaner_elapsed_lbl.setStyleSheet(
+                "color: #ffb300; font-size: 12px; font-weight: bold; padding: 2px 4px; min-height: 20px;"
+            )
+        elif in_progress and start_ts is None:
             self.cleaner_elapsed_lbl.setText("Starting...")
             self.cleaner_elapsed_lbl.setStyleSheet(
-                "color: #ffb300; font-size: 13px; font-weight: bold;"
+                "color: #ffb300; font-size: 12px; font-weight: bold; padding: 2px 4px; min-height: 20px;"
             )
-        elif start_ts is not None:
+        elif in_progress and start_ts is not None:
             elapsed = int(_time.time() - start_ts)
             mins, secs = divmod(elapsed, 60)
             self.cleaner_elapsed_lbl.setText(f"{mins:02d}:{secs:02d}")
             self.cleaner_elapsed_lbl.setStyleSheet(
-                "color: #ffb300; font-size: 14px; font-weight: bold;"
+                "color: #ffb300; font-size: 12px; font-weight: bold; padding: 2px 4px; min-height: 20px;"
             )
         else:
             self.cleaner_elapsed_lbl.setText("\u2014")
             self.cleaner_elapsed_lbl.setStyleSheet(
-                "color: #fff; font-size: 14px; font-weight: bold;"
+                "color: #fff; font-size: 12px; font-weight: bold; padding: 2px 4px; min-height: 20px;"
             )
 
         # --- Last run ---
@@ -2662,10 +2730,7 @@ class MainWindow(QMainWindow):
             self.cleaner_lastrun_lbl.setText("Never")
 
         # --- Update Button Enabled States ---
-        in_progress = self.controller.config.get("cleaner_in_progress", False)
-        transitioning = self.controller.config.get("cleaner_transitioning", False)
         active = in_progress or transitioning
-        
         if hasattr(self, "manual_clean_btn"):
             self.manual_clean_btn.setEnabled(not active)
         if hasattr(self, "emergency_stop_btn"):

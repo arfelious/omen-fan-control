@@ -138,7 +138,7 @@ class CoreTempDialog(QDialog):
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh_temps)
-        self.timer.start(2000)
+        self.timer.start(1000)
 
     def refresh_temps(self):
         temps = self.controller.get_all_core_temps()

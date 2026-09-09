@@ -41,6 +41,7 @@ def serve() -> None:
 
     last_config_mtime: float = 0
     last_volatile_mtime: float = 0
+    cleaner_temp_history: list[float] = []
 
     while True:
         try:
@@ -73,16 +74,30 @@ def serve() -> None:
             if cleaner_active:
                 cleaner_in_progress = controller.config.get("cleaner_in_progress", False)
                 if cleaner_in_progress:
-                    if current_temp is not None and current_temp > 70:
-                        click.echo(f"WARNING: CPU Temp reached {current_temp}°C (> 70°C) during fan cleaning. Aborting immediately!")
-                        controller.stop_fan_cleaning()
-                    else:
-                        start_time = controller.config.get("cleaner_start_time", 0)
-                        if start_time and time.time() - start_time >= 30:
-                            click.echo("Fan cleaning cycle completed normally.")
-                            controller.stop_fan_cleaning()
+                    if current_temp is not None:
+                        cleaner_temp_history.append(float(current_temp))
+                        ma_win = controller.config.get("ma_window", 5)
+                        if len(cleaner_temp_history) > ma_win:
+                            cleaner_temp_history.pop(0)
+
+                        if len(cleaner_temp_history) >= 3:
+                            avg_cleaner_temp = sum(cleaner_temp_history) / len(cleaner_temp_history)
+                            if avg_cleaner_temp > 75:
+                                reason = f"Stopped early: CPU reached {avg_cleaner_temp:.1f}°C (> 75°C)"
+                                controller.log_cleaner(f"SAFETY ABORT: Daemon CPU average reached {avg_cleaner_temp:.1f}°C (> 75°C) during fan cleaning. Aborting immediately!")
+                                click.echo(f"WARNING: {reason}. Aborting immediately!")
+                                controller.stop_fan_cleaning(reason=reason)
+                    start_time = controller.config.get("cleaner_start_time", 0)
+                    dur = controller.config.get("cleaner_duration", 30)
+                    if start_time and time.time() - start_time >= dur:
+                        click.echo("Fan cleaning cycle completed normally.")
+                        controller.stop_fan_cleaning(reason=f"Completed ({dur}s)")
+                else:
+                    cleaner_temp_history.clear()
                 time.sleep(1)
                 continue
+            else:
+                cleaner_temp_history.clear()
 
             cleaner_enabled = controller.config.get("cleaner_enabled", False)
             if cleaner_enabled:
@@ -96,14 +111,15 @@ def serve() -> None:
                     due = (time.time() - last_run) >= interval
 
                 if due:
-                    if current_temp is not None and current_temp <= 70:
+                    if current_temp is not None and current_temp <= 75:
                         click.echo(f"Triggering automatic fan cleaning cycle (interval: {interval}s)...")
                         success, msg = controller.start_fan_cleaning()
                         if success:
                             def _auto_stop_cleaner() -> None:
-                                time.sleep(30)
+                                dur = controller.config.get("cleaner_duration", 30)
+                                time.sleep(dur)
                                 if controller.config.get("cleaner_in_progress", False):
-                                    controller.stop_fan_cleaning()
+                                    controller.stop_fan_cleaning(reason=f"Completed ({dur}s)")
                             threading.Thread(target=_auto_stop_cleaner, daemon=True).start()
                         else:
                             click.echo(f"Failed to start automatic fan cleaning: {msg}")

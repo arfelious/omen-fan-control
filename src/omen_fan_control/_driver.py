@@ -58,13 +58,17 @@ class DriverInstallerMixin:
                 if profile == "victus":
                     target_array = "victus_thermal_profile_boards"
                 elif profile in ["victus_s", "omen_v1", "omen_v1_legacy", "omen_v1_no_ec"]:
-                    target_array = "victus_s_thermal_profile_boards"
-                    if profile == "omen_v1":
-                        params_struct = "omen_v1_thermal_params"
+                    is_feature_boards = "hp_wmi_feature_boards[]" in content
+                    target_array = "hp_wmi_feature_boards" if is_feature_boards else "victus_s_thermal_profile_boards"
+                    suffix = "_board_params" if is_feature_boards else "_thermal_params"
+                    if profile == "victus_s":
+                        params_struct = f"victus_s{suffix}"
+                    elif profile == "omen_v1":
+                        params_struct = f"omen_v1{suffix}"
                     elif profile == "omen_v1_legacy":
-                        params_struct = "omen_v1_legacy_thermal_params"
+                        params_struct = f"omen_v1_legacy{suffix}"
                     elif profile == "omen_v1_no_ec":
-                        params_struct = "omen_v1_no_ec_thermal_params"
+                        params_struct = f"omen_v1_no_ec{suffix}"
 
                 start_idx = content.find(f"{target_array}[]")
                 if start_idx != -1:
@@ -72,25 +76,25 @@ class DriverInstallerMixin:
                     if end_idx != -1:
                         segment = content[start_idx:end_idx]
                         if f'"{board_name}"' not in segment:
-                            if target_array == "victus_s_thermal_profile_boards":
+                            if target_array in ("hp_wmi_feature_boards", "victus_s_thermal_profile_boards"):
                                 sentinel_idx = content.find("{},", start_idx)
                                 if sentinel_idx == -1 or sentinel_idx > end_idx:
                                     sentinel_idx = content.find("{}", start_idx)
 
                                 if sentinel_idx != -1 and sentinel_idx < end_idx:
                                     insertion = (
-                                        f'        {{\n'
-                                        f'            .matches = {{DMI_MATCH(DMI_BOARD_NAME, "{board_name}")}},\n'
-                                        f'            .driver_data = (void *)&{params_struct},\n'
-                                        f'        }},\n'
+                                        f'\t{{\n'
+                                        f'\t\t.matches = {{DMI_MATCH(DMI_BOARD_NAME, "{board_name}")}},\n'
+                                        f'\t\t.driver_data = (void *)&{params_struct},\n'
+                                        f'\t}},\n'
                                     )
                                     content = content[:sentinel_idx] + insertion + content[sentinel_idx:]
                                 else:
                                     insertion = (
-                                        f'        {{\n'
-                                        f'            .matches = {{DMI_MATCH(DMI_BOARD_NAME, "{board_name}")}},\n'
-                                        f'            .driver_data = (void *)&{params_struct},\n'
-                                        f'        }},\n'
+                                        f'\t{{\n'
+                                        f'\t\t.matches = {{DMI_MATCH(DMI_BOARD_NAME, "{board_name}")}},\n'
+                                        f'\t\t.driver_data = (void *)&{params_struct},\n'
+                                        f'\t}},\n'
                                     )
                                     content = content[:end_idx] + insertion + content[end_idx:]
                             else:

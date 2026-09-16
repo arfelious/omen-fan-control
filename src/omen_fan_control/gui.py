@@ -1711,7 +1711,6 @@ class MainWindow(QMainWindow):
             self.status_label.setStyleSheet("color: #888; padding: 5px;")
             self.update_manual_max_source_label()
             QMessageBox.information(self, "Driver Install", msg)
-        else:
             if msg == "PWM_DETECTED":
                  # Ask user to force
                  reply = QMessageBox.question(self, "Driver Detected", 
@@ -1722,6 +1721,21 @@ class MainWindow(QMainWindow):
                      self.run_driver_task(type_, force=True)
                  else:
                      self.status_label.setText("Install cancelled.")
+            elif msg.startswith("LOW_MAX_RPM_DETECTED:"):
+                 detected_rpm = msg.split(":")[1]
+                 reply = QMessageBox.question(
+                     self,
+                     "Low Max Fan Speed Detected",
+                     f"Detected Max Fan Speed is {detected_rpm} RPM (< 5000 RPM), possibly due to ACPI fan tables instead of actual hardware capability.\n\n"
+                     "Running 'Fan Calibration' first is advised to measure the actual full fan speed.\n\n"
+                     "Do you want to proceed with driver installation anyway?",
+                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                     QMessageBox.StandardButton.No,
+                 )
+                 if reply == QMessageBox.StandardButton.Yes:
+                     self.run_driver_task(type_, force=True)
+                 else:
+                     self.status_label.setText("Install cancelled. Run Calibration first.")
             else:
                 QMessageBox.critical(self, "Driver Install Error", msg)
 

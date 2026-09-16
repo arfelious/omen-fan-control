@@ -78,6 +78,8 @@ class FanController(
         self.pwm2_path = self.hwmon_path / "pwm2"
         self.fan1_input_path = self.hwmon_path / "fan1_input"
         self.fan2_input_path = self.hwmon_path / "fan2_input"
+        self.fan1_max_path = self.hwmon_path / "fan1_max"
+        self.fan2_max_path = self.hwmon_path / "fan2_max"
         self.cpu_temp_path = self._find_cpu_temp_path()
 
     def _find_cpu_temp_path(self) -> Path | None:
@@ -273,9 +275,23 @@ class FanController(
         elif mode == 'auto':
             self.write_sys_file(self.pwm1_enable_path, 2)
 
+    def get_hardware_fan_limits(self) -> tuple[int, int]:
+        c_max = 0
+        g_max = 0
+        if getattr(self, "fan1_max_path", None) and self.fan1_max_path.exists():
+            val = self.read_sys_file(self.fan1_max_path)
+            if val and val.strip().isdigit():
+                c_max = int(val.strip())
+        if getattr(self, "fan2_max_path", None) and self.fan2_max_path.exists():
+            val = self.read_sys_file(self.fan2_max_path)
+            if val and val.strip().isdigit():
+                g_max = int(val.strip())
+        return c_max, g_max
+
     def get_effective_fan_limits(self) -> tuple[int, int]:
         cal_c = int(self.config.get("fan1_max", 0)) or int(self.config.get("fan_max", 0))
         cal_g = int(self.config.get("fan2_max", 0)) or int(self.config.get("fan_max", 0))
+        hw_c, hw_g = self.get_hardware_fan_limits()
 
         if self.config.get("use_advanced_fan_control", False):
             strat = self.config.get("max_fan_speed_strategy", "calibration")
@@ -286,7 +302,9 @@ class FanController(
                     return cpu_m, gpu_m
                 if cal_c > 0 or cal_g > 0:
                     return cal_c or cal_g, cal_g or cal_c
-                return cpu_m or 6000, gpu_m or 5800
+                if hw_c > 0 or hw_g > 0:
+                    return hw_c or hw_g, hw_g or hw_c
+                return cpu_m or 0, gpu_m or 0
             elif strat == "custom":
                 cpu_m = int(self.config.get("manual_cpu_max_rpm") or 0)
                 gpu_m = int(self.config.get("manual_gpu_max_rpm") or 0)
@@ -294,16 +312,27 @@ class FanController(
                     return cpu_m, gpu_m
                 if cal_c > 0 or cal_g > 0:
                     return cal_c or cal_g, cal_g or cal_c
-                return cpu_m or 6000, gpu_m or 5800
+                if hw_c > 0 or hw_g > 0:
+                    return hw_c or hw_g, hw_g or hw_c
+                return cpu_m or 0, gpu_m or 0
             else: # calibration
                 if cal_c > 0 or cal_g > 0:
                     return cal_c or cal_g, cal_g or cal_c
-                return 6000, 5800
-        
-        # Standard flow / default behavior: use calibrated value if calibrated max exists
+                if hw_c > 0 or hw_g > 0:
+                    return hw_c or hw_g, hw_g or hw_c
+                return 0, 0
+        elif self.config.get("use_manual_max_rpm", False) or self.config.get("bypass_calibration", False):
+            cpu_m = int(self.config.get("manual_cpu_max_rpm") or self.config.get("manual_max_rpm", 0))
+            gpu_m = int(self.config.get("manual_gpu_max_rpm") or self.config.get("manual_max_rpm", 0))
+            if cpu_m > 0 and gpu_m > 0:
+                return cpu_m, gpu_m
+
+        # Default behavior: use calibrated value if exists, else hardware reported max
         if cal_c > 0 or cal_g > 0:
             return cal_c or cal_g, cal_g or cal_c
-        return 6000, 5800
+        if hw_c > 0 or hw_g > 0:
+            return hw_c or hw_g, hw_g or hw_c
+        return 0, 0
 
     def get_effective_fan_max(self) -> int:
         cpu_m, gpu_m = self.get_effective_fan_limits()
@@ -363,10 +392,8 @@ class FanController(
 
         elif method == "asymmetrical":
             cpu_max, gpu_max = self.get_effective_fan_limits()
-            if cpu_max <= 0:
-                cpu_max = 6000
-            if gpu_max <= 0:
-                gpu_max = 5800
+            if cpu_max <= 0 or gpu_max <= 0:
+                return cpu_pwm, cpu_pwm
 
             cpu_rpm = (cpu_pwm / 255) * cpu_max
             offset = int(self.config.get("asymmetrical_offset_rpm", 200))
@@ -406,10 +433,8 @@ class FanController(
 
         elif method == "asymmetrical":
             cpu_max, gpu_max = self.get_effective_fan_limits()
-            if cpu_max <= 0:
-                cpu_max = 6000
-            if gpu_max <= 0:
-                gpu_max = 5800
+            if cpu_max <= 0 or gpu_max <= 0:
+                return cpu_pwm, cpu_pwm
             cpu_rpm = (cpu_pwm / 255) * cpu_max
             offset = int(self.config.get("asymmetrical_offset_rpm", 200))
             target_gpu_rpm = max(0, min(gpu_max, cpu_rpm + offset))

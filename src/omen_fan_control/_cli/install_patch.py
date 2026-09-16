@@ -61,6 +61,19 @@ def install_patch(
                 msg_add = "\n(The current installation may be temporary)"
             if click.confirm(f"Driver seems to be already active/installed.{msg_add}\nForce re-install?"):
                 success, msg = controller.install_driver_temp(force=True)
+        if not success and msg.startswith("LOW_MAX_RPM_DETECTED:"):
+            detected_rpm = msg.split(":")[1]
+            prompt = (
+                f"Notice: Detected Max Fan Speed is {detected_rpm} RPM (< 5000 RPM), "
+                "possibly due to parsed fan tables instead of the hardware reported max.\n"
+                "Running 'fan-control --calibrate' is advised to measure the actual full fan speed.\n"
+                "Do you want to proceed with driver installation anyway?"
+            )
+            if click.confirm(prompt, default=False):
+                success, msg = controller.install_driver_temp(force=True)
+            else:
+                click.echo("Installation cancelled. Please run 'fan-control --calibrate' first.")
+                return
         click.echo(msg)
         if not success:
             sys.exit(1)
@@ -75,6 +88,19 @@ def install_patch(
                 msg_add = "\n(The current installation may be temporary)"
             if click.confirm(f"Driver seems to be already active/installed.{msg_add}\nForce re-install?"):
                 success, msg = controller.install_driver_perm(force=True)
+        if not success and msg.startswith("LOW_MAX_RPM_DETECTED:"):
+            detected_rpm = msg.split(":")[1]
+            prompt = (
+                f"Notice: Detected Max Fan Speed is {detected_rpm} RPM (< 5000 RPM), "
+                "possibly due to parsed fan tables instead of the hardware reported max.\n"
+                "Running 'fan-control --calibrate' is advised to measure the actual full fan speed.\n"
+                "Do you want to proceed with driver installation anyway?"
+            )
+            if click.confirm(prompt, default=False):
+                success, msg = controller.install_driver_perm(force=True)
+            else:
+                click.echo("Installation cancelled. Please run 'fan-control --calibrate' first.")
+                return
         click.echo(msg)
         if not success:
             sys.exit(1)

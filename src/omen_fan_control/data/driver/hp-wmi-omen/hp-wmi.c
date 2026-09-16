@@ -492,6 +492,10 @@ static const struct dmi_system_id hp_wmi_feature_boards[] __initconst = {
 		.driver_data = (void *)&victus_s_board_params,
 	},
 	{
+		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C2F")},
+		.driver_data = (void *)&victus_s_board_params,
+	},
+	{
 		.matches = {DMI_MATCH(DMI_BOARD_NAME, "8C4D")},
 		.driver_data = (void *)&omen_v1_board_params,
 	},
@@ -3410,12 +3414,16 @@ static umode_t hp_wmi_hwmon_is_visible(const void *data, enum hwmon_sensor_types
 	case hwmon_pwm:
 		return 0644;
 	case hwmon_fan:
-		if (hp_wmi_fan_control_supported()) {
-			if (hp_wmi_get_active_fan_speed(channel) >= 0)
-				return 0444;
-		} else {
-			if (hp_wmi_get_fan_speed(channel) >= 0)
-				return 0444;
+		if (attr == hwmon_fan_input) {
+			if (hp_wmi_fan_control_supported()) {
+				if (hp_wmi_get_active_fan_speed(channel) >= 0)
+					return 0444;
+			} else {
+				if (hp_wmi_get_fan_speed(channel) >= 0)
+					return 0444;
+			}
+		} else if (attr == hwmon_fan_max) {
+			return 0444;
 		}
 		break;
 	default:
@@ -3434,14 +3442,20 @@ static int hp_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type, u
 	priv = dev_get_drvdata(dev);
 	switch (type) {
 	case hwmon_fan:
-		if (hp_wmi_fan_control_supported())
-			ret = hp_wmi_get_active_fan_speed(channel);
-		else
-			ret = hp_wmi_get_fan_speed(channel);
-		if (ret < 0)
-			return ret;
-		*val = ret;
-		return 0;
+		if (attr == hwmon_fan_input) {
+			if (hp_wmi_fan_control_supported())
+				ret = hp_wmi_get_active_fan_speed(channel);
+			else
+				ret = hp_wmi_get_fan_speed(channel);
+			if (ret < 0)
+				return ret;
+			*val = ret;
+			return 0;
+		} else if (attr == hwmon_fan_max) {
+			*val = ((channel == GPU_FAN) ? priv->gpu_max_rpm : priv->cpu_max_rpm) * 100;
+			return 0;
+		}
+		return -EINVAL;
 	case hwmon_pwm:
 		if (attr == hwmon_pwm_input) {
 			if (hp_wmi_fan_control_supported()) {
@@ -3536,7 +3550,7 @@ static int hp_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type, 
 }
 
 static const struct hwmon_channel_info *info[] = {
-	HWMON_CHANNEL_INFO(fan, HWMON_F_INPUT, HWMON_F_INPUT),
+	HWMON_CHANNEL_INFO(fan, HWMON_F_INPUT | HWMON_F_MAX, HWMON_F_INPUT | HWMON_F_MAX),
 	HWMON_CHANNEL_INFO(pwm, HWMON_PWM_ENABLE | HWMON_PWM_INPUT, HWMON_PWM_INPUT), NULL};
 
 static const struct hwmon_ops ops = {

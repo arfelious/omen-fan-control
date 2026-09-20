@@ -268,7 +268,7 @@ sudo modprobe acpi_call
 
 This utility is part of an ongoing effort to bring more **OMEN Gaming Hub** features to Linux. You might also want to check this project out:
 
-[Omen RGB Linux](https://github.com/arfelious/omen-rgb-linux): Per-key RGB lighting controller with GUI and SDK for OMEN laptops on Linux.
+[Omen RGB Linux](https://github.com/arfelious/omen-rgb-linux): RGB lighting controller that supports 4-zone, single-zone and per-key keyboards with GUI and SDK for OMEN/Victus laptops on Linux.
 
 ## Uninstallation
 

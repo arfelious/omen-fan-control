@@ -264,6 +264,13 @@ sudo pacman -S acpi_call-dkms
 sudo modprobe acpi_call
 ```
 
+## Contribution
+
+Pull requests, issues, and notifying about tested hardwares are welcome!
+
+**We are looking for testers. If you'd like to help, feel free to look at [Issue #35](https://github.com/arfelious/omen-fan-control/issues/35)**
+
+
 ## Related Projects
 
 This utility is part of an ongoing effort to bring more **OMEN Gaming Hub** features to Linux. You might also want to check this project out:

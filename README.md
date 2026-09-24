@@ -10,7 +10,7 @@ This tool includes a backported `hp-wmi` driver patch from the latest Linux kern
 2. **HP Victus**
 3. **HP Omen**
 
-The patch can be installed on versions before `6.20` as well.
+This patch applies across all 6.x releases and kernels 7.0–7.2.
 
 **Reference Kernel Commit:**
 [platform/x86: hp-wmi: add manual fan control for Victus S models](https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c)
@@ -264,7 +264,7 @@ sudo pacman -S acpi_call-dkms
 sudo modprobe acpi_call
 ```
 
-## Contribution
+## Contributing
 
 Pull requests, issues, and notifying about tested hardwares are welcome!
 

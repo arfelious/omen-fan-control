@@ -1,14 +1,14 @@
 # HP Omen Fan Control (Linux)
 
-This tool provides fan control for HP Omen Max, Victus and Omen laptops on Linux. It includes installer for a kernel driver patch (`hp-wmi`) to expose PWM controls and a userspace utility to manage fan curves, create watchdog that sets the fan configuration periodically and a simple stress test tool to see the fan curve in effect. It also allows periodically reversing the fan spin direction on supported boards to expel dust.
+This tool provides fan control for HP/HyperX Omen Max, Victus and Omen laptops on Linux. It includes installer for a kernel driver patch (`hp-wmi`) to expose PWM controls and a userspace utility to manage fan curves, create watchdog that sets the fan configuration periodically and a simple stress test tool to see the fan curve in effect. It also allows periodically reversing the fan spin direction on supported boards to expel dust.
 
 ## Context
 
 This tool includes a backported `hp-wmi` driver patch from the latest Linux kernel, which introduces native fan control support for many devices from the following models:
 
-1. **HP Omen Max**
-2. **HP Victus**
-3. **HP Omen**
+1. **Omen Max**
+2. **Victus**
+3. **Omen**
 
 This patch applies across Linux 5.15+ (including Ubuntu 22.04 LTS), all 6.x releases, and kernels 7.0–7.2.
 

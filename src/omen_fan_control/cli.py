@@ -71,7 +71,7 @@ def options(wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpol
             changed = True
             click.echo(f"Calibration wait time set to {wait_time}s")
         else:
-            click.echo("Error: Wait time must be positive.")
+            raise click.ClickException("Wait time must be positive.")
     
     if watchdog is not None:
         if watchdog == -1:
@@ -82,7 +82,7 @@ def options(wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpol
             changed = True
             click.echo(f"Watchdog interval set to {watchdog}s")
         else:
-            click.echo("Error: Watchdog interval must be positive.")
+            raise click.ClickException("Watchdog interval must be positive.")
 
     if ma_window is not None:
         if ma_window == -1:
@@ -93,7 +93,7 @@ def options(wait_time, watchdog, ma_window, bypass_patch_warning, curve_interpol
             changed = True
             click.echo(f"MA Window set to {ma_window}")
         else:
-            click.echo("Error: MA Window must be positive.")
+            raise click.ClickException("MA Window must be positive.")
     
     if bypass_patch_warning is not None:
         if bypass_patch_warning == 'show':

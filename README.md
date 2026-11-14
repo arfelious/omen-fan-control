@@ -18,9 +18,9 @@ This patch applies across Linux 5.15+ (including Ubuntu 22.04 LTS), all 6.x rele
 This program also includes a modification that sets the max speed according to calibration if the query to get the Max RPM fails for your device.
 
 ## Tested Hardware
-* **Models:** HP OMEN MAX 16-ah0xxxnt (8D41), HP OMEN Transcend 16-u1xxx (8C4D), HP OMEN Transcend 16-u0xxx (8BB3), OMEN by HP Gaming Laptop 16-xf0xxx (8BCA), HP Victus 16 s1xxx (8C9C), HP Omen 15 ek1xxx (88C8), HP Omen 16-ap0000 (8E35), HP Victus 15-fb2xxx (8C2F), HP Omen 17 17z-db100 (8E10)
+* **Models:** HP OMEN MAX 16-ah0xxxnt (8D41), HP OMEN Transcend 16-u1xxx (8C4D), HP OMEN Transcend 16-u0xxx (8BB3), OMEN by HP Gaming Laptop 16-xf0xxx (8BCA), HP Victus 16 s1xxx (8C9C), HP Omen 15 ek1xxx (88C8), HP Omen 16-ap0000 (8E35), HP Victus 15-fb2xxx (8C2F), HP Omen 17 17z-db100 (8E10), HP OMEN Gaming Laptop 16-ap0xxx (8D24)
 
-* **OS:** Arch Linux 6.18, 6.19, 7.0, 7.1, 7.2; Ubuntu 24.04 (HWE 7.0)
+* **OS:** Arch Linux 6.18, 6.19, 7.0, 7.1, 7.2; Ubuntu 24.04 (HWE 7.0), Fedora Linux 44 (7.3)
 
 > Would you like to add your model here? Create an issue with the "Tested Hardware" label and include these after successfully installing the patch and using the tool:
 > * Your laptop's board id (you can find it in /sys/class/dmi/id/board_name)

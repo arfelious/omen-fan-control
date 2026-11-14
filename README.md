@@ -10,7 +10,7 @@ This tool includes a backported `hp-wmi` driver patch from the latest Linux kern
 2. **Victus**
 3. **Omen**
 
-This patch applies across Linux 5.15+ (including Ubuntu 22.04 LTS), all 6.x releases, and kernels 7.0–7.2.
+This patch applies across Linux 5.15+ (including Ubuntu 22.04 LTS), all 6.x releases, and kernels 7.0–7.3.
 
 **Reference Kernel Commit:**
 [platform/x86: hp-wmi: add manual fan control for Victus S models](https://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git/commit/?h=for-next&id=46be1453e6e61884b4840a768d1e8ffaf01a4c1c)

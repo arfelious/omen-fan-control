@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         
         self.sensor_pill = QFrame()
         self.sensor_pill.setObjectName("SensorPill")
-        self.sensor_pill.setFixedSize(84, 24)
+        self.sensor_pill.setFixedSize(86, 26)
         pill_layout = QHBoxLayout(self.sensor_pill)
         pill_layout.setContentsMargins(2, 2, 2, 2)
         pill_layout.setSpacing(0)
@@ -86,11 +86,12 @@ class MainWindow(QMainWindow):
         pill_layout.addWidget(self.cpu_pill_btn)
         pill_layout.addWidget(self.gpu_pill_btn)
         nav_layout.addWidget(self.sensor_pill, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        nav_layout.addSpacing(4)
         
         # Hide GPU side if not present
         if not self.controller.has_gpu():
             self.gpu_pill_btn.setVisible(False)
-            self.sensor_pill.setFixedSize(44, 24) # Shrink pill
+            self.sensor_pill.setFixedSize(46, 26) # Shrink pill
 
         self.temp_label = QLabel("0°C")
         self.temp_label.setObjectName("HeaderTemp")
@@ -295,11 +296,8 @@ class MainWindow(QMainWindow):
         
         #SensorPill { 
             background-color: #252526; 
-            border-radius: 12px; 
+            border-radius: 13px; 
             border: 1px solid #444; 
-            margin-right: 10px;
-            max-height: 24px;
-            min-height: 24px;
         }
         #SensorPill QPushButton { 
             font-size: 9px; 
@@ -1380,6 +1378,8 @@ class MainWindow(QMainWindow):
         self.temp_label.setText(f"{temp}°C")
         
         sensor = self.controller.config.get("reference_sensor", "cpu")
+        if not self.controller.has_gpu():
+            sensor = "cpu"
         self.cpu_pill_btn.setProperty("active", sensor == "cpu")
         self.gpu_pill_btn.setProperty("active", sensor == "gpu")
         

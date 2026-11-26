@@ -195,7 +195,8 @@ class FanController(
             res = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
                                  capture_output=True, text=True)
             if res.returncode == 0 and res.stdout.strip():
-                return int(res.stdout.strip())
+                first_line = res.stdout.strip().splitlines()[0].strip()
+                return int(round(float(first_line)))
         except Exception:
             pass
 
